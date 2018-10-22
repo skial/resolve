@@ -1,0 +1,18 @@
+-lib tink_macro
+
+-cp src
+-cp tests
+
+-debug
+
+-D eval-stack
+-D analyzer-optimize
+-D coerce-verbose
+
+-main Entry
+
+-dce full
+
+--each
+
+-js bin/co.js
