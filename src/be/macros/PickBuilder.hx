@@ -18,15 +18,6 @@ be.types.Pick<String->Int>                      // Any method that unifies with 
 be.types.Pick<String->Rest->Int>                // Any method that has non optional String, zero or more optional args, and returns Int.
 be.types.Pick<Int->Self>                        // Any method that unifies with Int->Self. Self means the method returns a type that can unify with the type/module whatever.
 be.types.Pick<Int->Self, ~/from[a-zA-Z]+/>      // Same as before, but uses a regular expression to filter method names.
----
-thought1
-Pick<String->Int>, Pick<T->Int> - this creates an abstract of `String->Int` or `T->Int` in these examples.
-Resolve<Class<Std>>, Resolve<Class<T>> - Class<T> is the underlying type. Resolve has a macro @:from function
-that detects the expected type of Pick<T>
----
-thought2
-Instead of a generic build macro, Pick<T> is an abstract class. Underlying type Class<T>, with only a macro @:from
-function that searches the Class<T> for a compatible `Context.getExpectedType()`.
 **/
 
 class PickBuilder {

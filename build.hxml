@@ -3,7 +3,7 @@
 -cp src
 -cp tests
 
--debug
+#-debug
 
 -D eval-stack
 -D analyzer-optimize

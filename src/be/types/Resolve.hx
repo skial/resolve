@@ -17,8 +17,11 @@ using tink.MacroApi;
     @:from private static inline function fromFunction<T:Function>(v:T):Resolve<T, ~//i> return (cast v:Resolve<T, ~//i>);
 
     @:from public static macro function coerce<In, Out:Function>(expr:ExprOf<Class<In>>):ExprOf<Resolve<Out, ~//i>> {
-        var typeof = expr.typeof().sure();
-        var expectedType = Context.getExpectedType();
+        return coerceMacro(expr, expr.typeof().sure(), Context.getExpectedType());
+    }
+
+    #if (eval || macro)
+    public static function coerceMacro(expr:Expr, typeof:Type, expectedType:Type) {
         var expectedComplex = expectedType.toComplex();
         var rawType = (macro (null:$expectedComplex).get()).typeof().sure();
         var ereg:EReg = null;
@@ -30,7 +33,7 @@ using tink.MacroApi;
                         #if (debug && coerce_verbose)
                         trace( r, opt );
                         #end
-                        ereg = new EReg(r, opt);
+                        if (r != '') ereg = new EReg(r, opt);
 
                     case TFun(args, ret):
                         rawType = param;
@@ -43,12 +46,14 @@ using tink.MacroApi;
                 }
 
             case x:
+                #if (debug && coerce_verbose)
                 trace( x );
+                #end
 
         }
         
         var rawComplex = rawType.toComplex();
-        var result:Expr = null;
+        var result:Expr = macro @:empty null;
 
         switch typeof.reduce() {
             case TAnonymous(_.get() => { status: AClassStatics( _.get() => cls )}):
@@ -71,7 +76,9 @@ using tink.MacroApi;
                 if (matches.length > 0) result = '$path.${matches[matches.length-1].name}'.resolve();
 
             case x:
-                //strace( x );
+                #if (debug && coerce_verbose)
+                trace( x );
+                #end
         }
 
         #if (debug && coerce_verbose)
@@ -80,5 +87,6 @@ using tink.MacroApi;
         #end
         return macro @:pos(expr.pos) ($result:$rawComplex);
     }
+    #end
 
 }

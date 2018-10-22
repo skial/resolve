@@ -1,5 +1,6 @@
 package ;
 
+import be.co.Coerce;
 import be.types.Pick;
 import be.types.Resolve;
 import be.types.Resolve.coerce;
@@ -17,6 +18,16 @@ class Entry {
         var input = '999';
         trace( asInt(coerce(Std), input) );     // trace(999);
         trace( asInt(coerce(Fake), input) );    // trace(1000);
+
+        //
+
+        var input = '2018-11-15';
+        var aInt:Int = Coerce.value( input );
+        var aFloat:Float = Coerce.value( input );
+        var aDate:Date = Coerce.value( input );
+        var aFake:Fake = Coerce.value( input );
+
+        trace( aInt /*2018*/, aFloat /*2018*/, aDate /*Novemeber 15th 2018*/, aFake );
     }
 
     public static function fake(v:String):Int return throw 'bugger';
@@ -30,7 +41,12 @@ class Entry {
 }
 
 class Fake {
+    var name:String;
+    public function new(v:String) {
+        name = v;
+    }
     public static function parseFloat(v:String):Float return 0.0;
     public static function falseSig(v:String):Int return throw 'This is skipped due to the `~/int/i` regular expression';
     public static function parseInt(v:String):Int return 1000;
+    public static function mkFake(v:String):Fake return new Fake(v);
 }
