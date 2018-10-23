@@ -9,7 +9,7 @@ using haxe.macro.TypeTools;
 using tink.MacroApi;
 #end
 
-@:callable @:notNull abstract Coerce<From, To>(From->To) from From->To {
+@:callable @:notNull abstract Coerce<From, To>(From->To) from From->To to From->To {
 
     #if (eval || macro)
     public static var stringMap = [
@@ -18,12 +18,21 @@ using tink.MacroApi;
         'Date' => macro std.Date.fromString,
         'String' => macro Std.string,
     ];
+    public static var intMap = [
+        'String' => macro Std.string,
+    ];
+    public static var floatMap = [
+        'String' => macro Std.string,
+    ];
+    public static var boolMap = [
+        'String' => macro Std.string,
+    ];
     public static var typeMap = [
         'String' => stringMap,
-        'Int' => new Map(),
-        'Float' => new Map(),
-        'Bool' => new Map(),
-        'Array' => new Map()
+        'Int' => intMap,
+        'Float' => floatMap,
+        'Bool' => boolMap,
+        //'Array' => new Map()
     ];
     #end
 
@@ -50,10 +59,10 @@ using tink.MacroApi;
                         get:() -> { 
                             fields: [],
                             status: AClassStatics(
-                                {get:()->_return.getClass(), toString: ()->''}
+                                {get:()->_return.getClass(), toString: ()->_return.getID()}
                             )
                         },
-                        toString:()->'',
+                        toString:()->_return.getID(),
                     }),
                     custom.toType().sure()
                 );
