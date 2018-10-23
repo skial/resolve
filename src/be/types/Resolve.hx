@@ -13,7 +13,6 @@ using tink.MacroApi;
 @:callable @:notNull abstract Resolve<T:Function, @:const R:EReg>(T) {
 
     @:noCompletion public inline function get():T return this;
-
     @:from private static inline function fromFunction<T:Function>(v:T):Resolve<T, ~//i> return (cast v:Resolve<T, ~//i>);
 
     @:from public static macro function coerce<In, Out:Function>(expr:ExprOf<Class<In>>):ExprOf<Resolve<Out, ~//i>> {
@@ -53,12 +52,12 @@ using tink.MacroApi;
         }
         
         var rawComplex = rawType.toComplex();
-        var result:Expr = macro @:empty null;
+        var result:Expr = null;
 
         switch typeof.reduce() {
             case TAnonymous(_.get() => { status: AClassStatics( _.get() => cls )}):
                 var path = cls.pack.join('.');
-                path += (path == '' ? '' : '.') + cls.name;
+                path += (path.length == 0 ? '' : '.') + cls.name;
                 var tpath = path.asTypePath();
                 var matches = [];
                 var eregMatch = true;
@@ -85,6 +84,11 @@ using tink.MacroApi;
         trace( rawComplex.toString() );
         trace( result.toString() );
         #end
+
+        if (result == null) {
+            Context.fatalError('Unable to find a matching signature of ${rawType.toComplex().toString()} on ${expr.toString()}.', expr.pos);
+        }
+
         return macro @:pos(expr.pos) ($result:$rawComplex);
     }
     #end
