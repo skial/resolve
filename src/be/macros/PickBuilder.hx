@@ -31,7 +31,6 @@ class PickBuilder {
             var reg = null;
             var ereg = macro ~//;
             var filter:EReg = null;
-            var self = 'be.types.$typeName'.asComplexType();
             var ctor = 'be.types.$typeName'.asTypePath();
             
             for (type in ctx.types) {
