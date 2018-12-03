@@ -54,8 +54,11 @@ class PickBuilder {
 
             var ctype = macro:be.types.Resolve<$signatureComplex>;
             var td = macro class $typeName {
-                public inline function new(v) this = v;
+                public inline function new(v:$ctype) this = v;
+                @:to public inline function toResolve():$signatureComplex return this;
+                //@:to public inline function toFunction() return this.get();
                 @:from public static inline function fromResolve(r:$ctype) return new $ctor(r);
+                @:from public static inline function fromFunc(r:$signatureComplex) return new $ctor(r);
             }
             
             switch ctype {

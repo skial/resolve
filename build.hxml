@@ -7,7 +7,7 @@
 
 -D eval-stack
 -D analyzer-optimize
--D coerce-verbose
+#-D coerce-verbose
 
 -main Entry
 
