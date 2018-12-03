@@ -28,7 +28,17 @@ class Entry {
         var aFake:Fake = coerce( input );
 
         trace( aInt /*2018*/, aFloat /*2018*/, aDate /*Novemeber 15th 2018*/, aFake );
+
+        // Select instances
+
+        var fakey = new Fake('hello fake world.');
+        trace( fakey /* {name:"hello fake world"} */ );
+        trace( mkFake(resolve(Fake), input) ); // Static access on Fake via `mkFake`
+        trace( mkFake(resolve(fakey), input) ); // Instance access on Fake via `mutate`
+        
     }
+
+    public static inline function mkFake(r:Pick<String->Fake>, v:String):Fake return r(v);
 
     public static function fake(v:String):Int return throw 'bugger';
     public static function fakeParseInt1(v:String):Int return 10000;
@@ -49,4 +59,9 @@ class Fake {
     public static function falseSig(v:String):Int return throw 'This is skipped due to the `~/int/i` regular expression';
     public static function parseInt(v:String):Int return 1000;
     public static function mkFake(v:String):Fake return new Fake(v);
+
+    public function mutate(newName:String):Fake {
+        name += newName;
+        return this;
+    }
 }
