@@ -1,31 +1,31 @@
 package ;
 
-import be.co.Coerce;
 import be.types.Pick;
 import be.types.Resolve;
 import be.types.Resolve.coerce;
+import be.types.Resolve.resolve;
 
 class Entry {
 
     public static function main() {
-        var m:Pick<String->Int> = coerce(Std);
-        var a:Resolve<String->Int, ~/int(2)?/i> = coerce(Entry);
+        var m:Pick<String->Int> = resolve(Std);
+        var a:Resolve<String->Int, ~/int(2)?/i> = resolve(Entry);
         
         trace( foo(m, '123') );
         trace( foo(a, '124') );
         trace( foo(_ -> 1, '125') );
 
         var input = '999';
-        trace( asInt(coerce(Std), input) );     // trace(999);
-        trace( asInt(coerce(Fake), input) );    // trace(1000);
+        trace( asInt(resolve(Std), input) );     // trace(999);
+        trace( asInt(resolve(Fake), input) );    // trace(1000);
 
         //
 
         var input = '2018-11-15';
-        var aInt:Int = Coerce.value( input );
-        var aFloat:Float = Coerce.value( input );
-        var aDate:Date = Coerce.value( input );
-        var aFake:Fake = Coerce.value( input );
+        var aInt:Int = coerce( input );
+        var aFloat:Float = coerce( input );
+        var aDate:Date = coerce( input );
+        var aFake:Fake = coerce( input );
 
         trace( aInt /*2018*/, aFloat /*2018*/, aDate /*Novemeber 15th 2018*/, aFake );
     }
