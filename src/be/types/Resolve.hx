@@ -4,6 +4,9 @@ import haxe.Constraints.Function;
 
 #if (eval || macro)
 import haxe.macro.*;
+import haxe.macro.Type;
+import haxe.macro.Type.ClassField;
+import haxe.macro.Expr.ComplexType;
 
 using haxe.macro.Context;
 using tink.CoreApi;
@@ -25,10 +28,10 @@ abstract Method<T:Function>(T) from Function to Function {
 #if (eval || macro)
 enum ResolveTask {
     /**
-        var m:String->Float = coerce(Type);
-        var m:`signature` = coerce(`module`);
-        var m:Resolve<String->Float, ~/int/i> = coerce(Type);
-        var m:Resolve<`signature`, `ereg`> = coerce(`module`);
+        var m:String->Float = resolve(Type);
+        var m:`signature` = resolve(`module`);
+        var m:Resolve<String->Float, ~/int/i> = resolve(Type);
+        var m:Resolve<`signature`, `ereg`> = resolve(`module`);
         ---
         If it can resolve to a function, it will look for a matching type `signature`
         on `module`
@@ -43,6 +46,38 @@ enum ResolveTask {
         If a type doesnt exist, search `output` for a `input->output` method.
     **/
     ConvertValue(input:Type, output:Type, value:Expr);
+
+    /**
+        var i:Int = 100;
+        var m:Resolve<Int->Int, ~/^(add(ition|able)?|plus)/i> = resolve(i);
+        ---
+        var i:`input` = `expr`;
+        var m:Resolve<`signature`, `ereg`> = resolve(i);
+        ---
+        var i:Int = 100;
+        var i:`oldInput` = 100;
+        var m:Resolve<Int->Int, ~/^(add(ition|able)?|plus)/i> = resolve(be.types.int.Add.add.bind(i));
+        var m:Resolve<`signature`, `ereg`> = resolve((be.types.int.Add.add.bind(`expr`):`newInput`));
+        ---
+        CoreApi type promotion takes, in this case, an `Int` const, wraps it in
+        a specialist abstract, matching the required type.
+        
+        With `-dce full` this should be inlined when possible.
+    **/
+    //TypePromotion(expr:Expr, oldInput:Type, newInput:Type, signature:Type, ?ereg:EReg);
+}
+
+@:notNull @:forward @:forwardStatics enum abstract Metadata(String) from String to String {
+    public var CoreApi = ':coreApi';
+    public var CoreType = ':coreType';
+}
+
+@:notNull @:forward @:forwardStatics enum abstract Errors(String) from String to String {
+    public var NoMatches = 'No vailid matches have been found.';
+    public var UseCoerce = 'Use `Resolve.coerce` instead.';
+    public var UseResolve = 'Use `Resolve.resolve` instead.';
+    public var NotFunction = 'Signature should be a function.';
+    public var TotalFailure = 'No expression can be found or constructed.';
 }
 #end
 
@@ -51,24 +86,54 @@ enum ResolveTask {
     @:noCompletion public inline function get():T return this;
     @:from private static inline function fromFunction<T:Function>(v:T):Resolve<T, ~//i> return (cast v:Resolve<T, ~//i>);
 
-    @:from public static macro function resolve<In, Out:Function>(expr:ExprOf<Class<In>>):ExprOf<Out> {
+    public static macro function resolve<In, Out:Function>(expr:ExprOf<Class<In>>):ExprOf<Out> {
         var result = switch determineTask( expr, expr.typeof().sure(), Context.getExpectedType() ) {
-            case SearchMethod(signature, module, statics, e, ereg): findMethod(signature, module, statics, e, ereg);
-            case _: Context.fatalError( 'Use `Resolve.coerce` instead.', expr.pos );
+            case SearchMethod(signature, module, statics, e, ereg): 
+                var matches = findMethod(signature, module, statics, ereg);
+                if (matches.length > 0) {
+                    e.field( matches[matches.length - 1].name );
+                } else {
+                    Context.fatalError( NoMatches, e.pos );
+                }
+
+            case _: 
+                Context.fatalError( UseCoerce, expr.pos );
+
         }
         #if (debug && coerce_verbose)
-            trace(result.toString());
+        trace(result.toString());
         #end
         return result;
     }
 
-    @:from public static macro function coerce<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
+    public static macro function coerce<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
         var result = switch determineTask( expr, expr.typeof().sure(), Context.getExpectedType() ) {
             case ConvertValue(input, output, value): convertValue(input, output, value);
-            case _: Context.fatalError( 'Use `Resolve.resolve` instead.', expr.pos );
+            case _: Context.fatalError( UseResolve, expr.pos );
         }
         #if (debug && coerce_verbose)
-            trace(result.toString());
+        trace(result.toString());
+        #end
+        return result;
+    }
+
+    @:from private static macro function catchAll<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
+        var task = determineTask( expr, expr.typeof().sure(), Context.getExpectedType() );
+        var result = switch task {
+            case ConvertValue(input, output, value): 
+                convertValue(input, output, value);
+
+            case SearchMethod(signature, module, statics, e, ereg): 
+                var matches = findMethod(signature, module, statics, ereg);
+                if (matches.length > 0) {
+                    e.field( matches[matches.length - 1].name );
+                } else {
+                    Context.fatalError( NoMatches, e.pos );
+                }
+
+        }
+        #if (debug && coerce_verbose)
+        trace(result.toString());
         #end
         return result;
     }
@@ -100,55 +165,107 @@ enum ResolveTask {
     public static function determineTask(expr:Expr, input:Type, output:Type):ResolveTask {
         var result = null;
         
+        #if (debug && coerce_verbose)
+        trace( expr.toString() );
+        trace( input );
+        trace( output );
+        #end
+
         switch input.reduce() {
             case TAnonymous(_.get() => {status:AClassStatics(ref)}):
+                var ereg = null;
                 var outputComplex = output.toComplex();
                 var method = (macro be.types.Resolve.Method.fromResolve((null:$outputComplex))).typeof().sure();
+                // TODO this is just to force, I'm guessing, tink DirectTypes to real types.
+                var _signature = (macro (null:$outputComplex).get()).typeof();
+                #if (debug && coerce_verbose)
+                trace( ref );
+                trace( outputComplex );
+                trace( _signature );
+                trace( outputComplex.toString() );
+                #end
+                ereg = getEReg(outputComplex);
 
                 if (output.unify(method)) {
                     var methodComplex = method.toComplex();
                     var signature = (macro ((null:$outputComplex):$methodComplex).toResolve().get()).typeof().sure();
                     
-                    result = SearchMethod(signature, TInst(ref, []), true, ref.toString().resolve());
+                    result = SearchMethod(signature, TInst(ref, []), true, ref.toString().resolve(), ereg);
                 }
                 
-            case TInst(_.get() => t, params) if (t.constructor != null && !t.meta.has(':coreApi')):
+            case TInst(_.get() => t, params) if (t.constructor != null && !t.meta.has(CoreApi)):
                 var outputComplex = output.toComplex();
                 var method = (macro be.types.Resolve.Method.fromResolve((null:$outputComplex))).typeof().sure();
+                
+                var ereg = getEReg(outputComplex);
 
                 if (output.unify(method)) {
                     var methodComplex = method.toComplex();
                     var signature = (macro ((null:$outputComplex):$methodComplex).toResolve().get()).typeof().sure();
 
-                    result = SearchMethod(signature, input.reduce(), false, expr);
+                    result = SearchMethod(signature, input.reduce(), false, expr, ereg);
                 }
 
             case x:
+                #if (debug && coerce_verbose)
+                trace( x );
+                #end
                 result = ConvertValue(input, output, expr);
 
         }
 
+        #if (debug && coerce_verbose)
+        trace( result );
+        #end
+
         return result;
     }
 
-    public static function findMethod(signature:Type, module:Type, statics:Bool, expr:Expr, ?ereg:EReg):Null<Expr> {
-        var result = null;
+    public static function findMethod(signature:Type, module:Type, statics:Bool, ?ereg:EReg) {
+        var result = [];
+        var isArray = false;
+        var unified = false;
+        var pos = Context.currentPos();
         
+        #if (debug && coerce_verbose)
+        trace( signature.toComplex().toString() );
+        trace( module.toComplex().toString() );
+        trace( statics );
+        #end
+
         switch signature {
             case TFun(args, ret):
                 var moduleID = module.getID();
-                var fields = switch module {
+                #if (debug && coerce_verbose)
+                trace( moduleID );
+                trace( args );
+                trace( ret );
+                #end
+                var fields:Array<{name:String, type:Type}> = switch module {
                     case TInst(_.get() => t, params):
                         statics ? t.statics.get() : t.fields.get();
 
+                    case TAbstract(_.get() => t, params):
+                        [for (f in t.from) 
+                            (f.field == null) ? {name:'', type:f.t} : f.field
+                        ]
+                        .concat([
+                        for(f in t.binops)
+                            f.field
+                        ]);
+
                     case x:
                         #if (debug && coerce_verbose)
-                            trace(x);
+                        trace(x);
                         #end
                         [];
 
                 }
 
+                #if (debug && coerce_verbose)
+                trace( fields.map( f->f.name ) );
+                #end
+                
                 var matches = [];
 
                 if (fields.length > 0) for (field in fields) {
@@ -158,15 +275,15 @@ enum ResolveTask {
 
                 }
 
-                if (matches.length > 0) result = expr.field( matches[matches.length - 1].name );
+                #if (debug && coerce_verbose)
+                trace( matches.map( f->f.name ) );
+                #end
+
+                result = matches;
 
             case x:
-                Context.fatalError( 'Signature should be a function. Not ${x.getID()}', expr.pos );
+                Context.fatalError( NotFunction + ' Not ${x.getID()}', pos );
 
-        }
-
-        if (result == null) {
-            Context.fatalError( 'Unable to find a matching signature of ${signature.toComplex().toString()} on ${module.getID()}.', expr.pos );
         }
 
         return result;
@@ -176,7 +293,14 @@ enum ResolveTask {
         var result = null;
         var inputID = input.getID();
         var outputID = output.getID();
-        
+
+        #if (debug && coerce_verbose)
+        trace( input );
+        trace( output );
+        trace( value.toString() );
+        trace( inputID );
+        trace( outputID );
+        #end
         if (typeMap.exists( inputID )) {
             var sub = typeMap.get( inputID );
             if (sub.exists( outputID )) {
@@ -185,17 +309,61 @@ enum ResolveTask {
             }
 
         }
+
+        if (result == null) {
+            var outputComplex = output.toComplex();
+            var emptyArray = (macro new Array()).typeof().sure();
+            var matchesArray = emptyArray.unify(output);
+            var unified = input.unify(output);
+            #if (debug && coerce_verbose)
+            trace( matchesArray, unified, matchesArray && unified );
+            #end
+            if (unified) {
+                result = macro @:pos(value.pos) ($value:$outputComplex);
+
+            } else if (matchesArray) {
+                trace( matchesArray, outputComplex.toString() );
+
+            }
+        }
         
         if (result == null) {
             var inputComplex = input.toComplex();
             var outputComplex = output.toComplex();
             var signature = (macro:$inputComplex->$outputComplex).toType().sure();
-            var tmp = findMethod(signature, output, true, outputID.resolve());
+            #if (debug && coerce_verbose)
+            trace( signature );
+            #end
+            var matches = findMethod(signature, output, true);
+            var tmp = if (matches.length > 0) {
+                outputID.resolve().field(matches[matches.length-1].name);
+            } else {
+                Context.fatalError( NoMatches, value.pos );
+            }
             
             result = tmp == null ? value : macro @:pos(value.pos) $tmp($value);
         }
 
-        if (result == null) Context.fatalError( 'No expression can be found or constructed.', value.pos );
+        if (result == null) Context.fatalError( TotalFailure, value.pos );
+        
+        return result;
+    }
+
+    public static function getEReg(ctype:ComplexType):Null<EReg> {
+        var result = null;
+
+        switch ctype {
+            case TPath( {params:p} ) if (p != null && p.length > 1):
+                switch p[1] {
+                    case TPExpr(_.expr => EConst(CRegexp(r, o))):
+                        result = new EReg(r, o);
+
+                    case _:
+                }
+
+            case _:
+
+        }
 
         return result;
     }
