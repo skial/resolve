@@ -87,19 +87,29 @@ enum ResolveTask {
     @:from private static inline function fromFunction<T:Function>(v:T):Resolve<T, ~//i> return (cast v:Resolve<T, ~//i>);
 
     public static macro function resolve<In, Out:Function>(expr:ExprOf<Class<In>>):ExprOf<Out> {
-        var result = switch determineTask( expr, expr.typeof().sure(), Context.getExpectedType() ) {
+        var result = null;
+        switch determineTask( expr, expr.typeof().sure(), Context.getExpectedType() ) {
             case SearchMethod(signature, module, statics, e, ereg): 
-                var matches = findMethod(signature, module, statics, ereg);
-                if (matches.length > 0) {
-                    e.field( matches[matches.length - 1].name );
-                } else {
-                    Context.fatalError( NoMatches, e.pos );
-                }
+                findMethod(signature, module, statics, ereg).handle( o -> switch o {
+                    case Success(matches):
+                        if (matches.length > 0) {
+                            result = e.field( matches[matches.length - 1].name );
+
+                        } else {
+                            Context.fatalError( NoMatches, e.pos );
+
+                        }
+
+                    case Failure(error): 
+                        Context.fatalError( error.message, error.pos );
+
+                } );
 
             case _: 
                 Context.fatalError( UseCoerce, expr.pos );
 
         }
+        if (result == null) Context.fatalError( TotalFailure, expr.pos );
         #if (debug && coerce_verbose)
         trace(result.toString());
         #end
@@ -107,10 +117,18 @@ enum ResolveTask {
     }
 
     public static macro function coerce<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
-        var result = switch determineTask( expr, expr.typeof().sure(), Context.getExpectedType() ) {
-            case ConvertValue(input, output, value): convertValue(input, output, value);
-            case _: Context.fatalError( UseResolve, expr.pos );
+        var result = null;
+        switch determineTask( expr, expr.typeof().sure(), Context.getExpectedType() ) {
+            case ConvertValue(input, output, value): 
+                convertValue(input, output, value).handle( o -> switch o {
+                    case Success(expr): result = expr;
+                    case Failure(error): Context.fatalError( error.message, error.pos );
+                } );
+
+            case _: 
+                Context.fatalError( UseResolve, expr.pos );
         }
+        if (result == null) Context.fatalError( TotalFailure, expr.pos );
         #if (debug && coerce_verbose)
         trace(result.toString());
         #end
@@ -119,19 +137,32 @@ enum ResolveTask {
 
     @:from private static macro function catchAll<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
         var task = determineTask( expr, expr.typeof().sure(), Context.getExpectedType() );
-        var result = switch task {
+        var result = null;
+        switch task {
             case ConvertValue(input, output, value): 
-                convertValue(input, output, value);
+                convertValue(input, output, value).handle( o -> switch o {
+                    case Success(expr): result = expr;
+                    case Failure(error): Context.fatalError( error.message, error.pos );
+                } );
 
             case SearchMethod(signature, module, statics, e, ereg): 
-                var matches = findMethod(signature, module, statics, ereg);
-                if (matches.length > 0) {
-                    e.field( matches[matches.length - 1].name );
-                } else {
-                    Context.fatalError( NoMatches, e.pos );
-                }
+                findMethod(signature, module, statics, ereg).handle( o -> switch o {
+                    case Success(matches):
+                        if (matches.length > 0) {
+                            result = e.field( matches[matches.length - 1].name );
+
+                        } else {
+                            Context.fatalError( NoMatches, e.pos );
+
+                        }
+
+                    case Failure(error):
+                        Context.fatalError( error.message, error.pos );
+
+                } );
 
         }
+        if (result == null) Context.fatalError( TotalFailure, expr.pos );
         #if (debug && coerce_verbose)
         trace(result.toString());
         #end
@@ -221,7 +252,7 @@ enum ResolveTask {
         return result;
     }
 
-    public static function findMethod(signature:Type, module:Type, statics:Bool, ?ereg:EReg) {
+    public static function findMethod(signature:Type, module:Type, statics:Bool, ?ereg:EReg):Promise<Array<{name:String, type:Type}>> {
         var result = [];
         var isArray = false;
         var unified = false;
@@ -282,14 +313,14 @@ enum ResolveTask {
                 result = matches;
 
             case x:
-                Context.fatalError( NotFunction + ' Not ${x.getID()}', pos );
+                return new Error( NotFound, NotFunction + ' Not ${x.getID()}', pos );
 
         }
 
         return result;
     }
 
-    public static function convertValue(input:Type, output:Type, value:Expr):Expr {
+    public static function convertValue(input:Type, output:Type, value:Expr):Promise<Expr> {
         var result = null;
         var inputID = input.getID();
         var outputID = output.getID();
@@ -334,17 +365,30 @@ enum ResolveTask {
             #if (debug && coerce_verbose)
             trace( signature );
             #end
-            var matches = findMethod(signature, output, true);
-            var tmp = if (matches.length > 0) {
-                outputID.resolve().field(matches[matches.length-1].name);
-            } else {
-                Context.fatalError( NoMatches, value.pos );
-            }
+            var tmp:Expr = null;
+            var error:Error = null;
+
+            findMethod(signature, output, true).handle( function(o) switch o {
+                case Success(matches):
+                    if (matches.length > 0) {
+                        tmp = outputID.resolve().field(matches[matches.length-1].name);
+
+                    } else {
+                        error = new Error( NotFound, NoMatches, value.pos );
+
+                    }
+
+                case Failure(err):
+                    error = err;
+
+            } );
+
+            if (error != null) return new Error( error.code, error.message, error.pos );
             
             result = tmp == null ? value : macro @:pos(value.pos) $tmp($value);
         }
 
-        if (result == null) Context.fatalError( TotalFailure, value.pos );
+        if (result == null) return new Error( NotFound, TotalFailure, value.pos );
         
         return result;
     }
