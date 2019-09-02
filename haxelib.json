@@ -1,0 +1,13 @@
+{
+    "name": "coerce",
+    "url": "https://github.com/skial/coerce",
+    "license": "MIT",
+    "classPath": "src",
+    "description": "Type conversion from one type to another",
+    "version": "0.0.1",
+    "releasenote": "Setup",
+    "contributors": ["skial"],
+    "dependencies": {
+        "tink_macro":"git:https://github.com/haxetink/tink_macro#4fd03ed6673d32011eb9423461a63f0e504ab170"
+    }
+  }

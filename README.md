@@ -1,6 +1,6 @@
 # coerce
 
-Helpful Types to select functions based on method signatures.
+Types to select functions based on method signatures.
 
 ### Types
 

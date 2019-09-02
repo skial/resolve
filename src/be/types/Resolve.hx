@@ -14,15 +14,15 @@ using tink.MacroApi;
 #end
 using StringTools;
 
-abstract Method<T:Function>(T) from Function to Function {
+abstract Method<T:Function>(Function) from Function to Function {
     public inline function new(v) this = v;
-    @:noCompletion public inline function get():T return this;
+    @:noCompletion public inline function get():T return cast this;
 
     @:from public static function of<T:Function>(v:T):Method<T> return new Method(v);
     @:from public static function fromResolve<T:Function>(v:Resolve<T, ~//>):Method<T> {
         return new Method(v.get());
     }
-    @:to public function toResolve():Resolve<T, ~//i> return this;
+    @:to public function toResolve():Resolve<T, ~//i> return cast this;
 }
 
 #if (eval || macro)
@@ -175,6 +175,7 @@ enum ResolveTask {
         'Float' => macro Std.parseFloat,
         'Date' => macro std.Date.fromString,
         'String' => macro (v -> v),
+        'Bool' => macro (v -> v.toLowerCase() == 'true'),
     ];
     public static var intMap = [
         'String' => macro Std.string,
