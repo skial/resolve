@@ -62,7 +62,7 @@ class Fake {
 
 #### `Pick`
 
-`Pick` is a `@:genericBuild` macro which wraps `Resolve` making it a more UX friendly type to work with. 
+`Pick` is a `@:genericBuild` macro which wraps `Resolve` making it a more friendly type to work with. 
 `Pick` only requires the type signature.
 
 ```haxe

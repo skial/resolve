@@ -90,7 +90,7 @@ enum ResolveTask {
         var result = null;
         switch determineTask( expr, expr.typeof().sure(), Context.getExpectedType() ) {
             case SearchMethod(signature, module, statics, e, ereg): 
-                findMethod(signature, module, statics, ereg).handle( o -> switch o {
+                findMethod(signature, module, statics, ereg).handle( function (o) switch o {
                     case Success(matches):
                         if (matches.length > 0) {
                             result = e.field( matches[matches.length - 1].name );
@@ -120,7 +120,7 @@ enum ResolveTask {
         var result = null;
         switch determineTask( expr, expr.typeof().sure(), Context.getExpectedType() ) {
             case ConvertValue(input, output, value): 
-                convertValue(input, output, value).handle( o -> switch o {
+                convertValue(input, output, value).handle( function(o) switch o {
                     case Success(expr): result = expr;
                     case Failure(error): Context.fatalError( error.message, error.pos );
                 } );
@@ -140,13 +140,13 @@ enum ResolveTask {
         var result = null;
         switch task {
             case ConvertValue(input, output, value): 
-                convertValue(input, output, value).handle( o -> switch o {
+                convertValue(input, output, value).handle( function(o) switch o {
                     case Success(expr): result = expr;
                     case Failure(error): Context.fatalError( error.message, error.pos );
                 } );
 
             case SearchMethod(signature, module, statics, e, ereg): 
-                findMethod(signature, module, statics, ereg).handle( o -> switch o {
+                findMethod(signature, module, statics, ereg).handle( function(o) switch o {
                     case Success(matches):
                         if (matches.length > 0) {
                             result = e.field( matches[matches.length - 1].name );
