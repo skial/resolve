@@ -1,0 +1,3 @@
+# @install: lix --silent download "gh://github.com/skial/haxe.macro.Metas#78f17585218cdec22797e061225c970f28782a51" into haxe.macro.Metas/0.0.1/github/78f17585218cdec22797e061225c970f28782a51
+-cp ${HAXE_LIBCACHE}/haxe.macro.Metas/0.0.1/github/78f17585218cdec22797e061225c970f28782a51/src
+-D haxe.macro.Metas=0.0.1

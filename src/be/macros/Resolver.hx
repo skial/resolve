@@ -4,33 +4,51 @@ import haxe.macro.*;
 import haxe.macro.Type;
 import haxe.macro.Type.ClassField;
 import haxe.macro.Expr.ComplexType;
+import haxe.macro.Metas;
+import haxe.macro.Defines;
 import be.coerce.Errors;
-import be.coerce.Metadata;
 import be.coerce.ResolveTask;
 
 using haxe.macro.Context;
 using tink.CoreApi;
 using tink.MacroApi;
 
+enum abstract LocalDefines(Defines) {
+    public var CoerceVerbose = 'coerce_verbose';
+    
+    @:to public inline function asBool():Bool {
+		return haxe.macro.Context.defined(this);
+	}
+
+    @:op(A == B) private static function equals(a:LocalDefines, b:Bool):Bool;
+    @:op(A && B) private static function and(a:LocalDefines, b:Bool):Bool;
+    @:op(A != B) private static function not(a:LocalDefines, b:Bool):Bool;
+    @:op(!A) private static function negate(a:LocalDefines):Bool;
+}
+
 class Resolver {
 
-    public static var stringMap = [
+    @:persistent public static var stringMap = [
         'Int' => macro Std.parseInt,
         'Float' => macro Std.parseFloat,
         'Date' => macro std.Date.fromString,
         'String' => macro (v -> v),
         'Bool' => macro (v -> v.toLowerCase() == 'true'),
     ];
-    public static var intMap = [
+
+    @:persistent public static var intMap = [
         'String' => macro Std.string,
     ];
-    public static var floatMap = [
+
+    @:persistent public static var floatMap = [
         'String' => macro Std.string,
     ];
-    public static var boolMap = [
+
+    @:persistent public static var boolMap = [
         'String' => macro Std.string,
     ];
-    public static var typeMap = [
+    
+    @:persistent public static var typeMap = [
         'String' => stringMap,
         'Int' => intMap,
         'Float' => floatMap,
@@ -41,11 +59,12 @@ class Resolver {
     public static function determineTask(expr:Expr, input:Type, output:Type):ResolveTask {
         var result = null;
         
-        #if (debug && coerce_verbose)
-        trace( expr.toString() );
-        trace( input );
-        trace( output );
-        #end
+        if (Debug && CoerceVerbose) {
+            trace( expr.toString() );
+            trace( input );
+            trace( output );
+            trace( input.reduce() );
+        }
 
         switch input.reduce() {
             case TAnonymous(_.get() => {status:AClassStatics(ref)}):
@@ -54,12 +73,14 @@ class Resolver {
                 var method = (macro be.types.Resolve.Method.fromResolve((null:$outputComplex))).typeof().sure();
                 // TODO this is just to force, I'm guessing, tink DirectTypes to real types.
                 var _signature = (macro (null:$outputComplex).get()).typeof();
-                #if (debug && coerce_verbose)
-                trace( ref );
-                trace( outputComplex );
-                trace( _signature );
-                trace( outputComplex.toString() );
-                #end
+
+                if (Debug && CoerceVerbose) {
+                    trace( ref );
+                    trace( outputComplex );
+                    trace( _signature );
+                    trace( outputComplex.toString() );
+                }
+
                 ereg = getEReg(outputComplex);
 
                 if (output.unify(method)) {
@@ -69,7 +90,7 @@ class Resolver {
                     result = SearchMethod(signature, TInst(ref, []), true, ref.toString().resolve(), ereg);
                 }
                 
-            case TInst(_.get() => t, params) if (t.constructor != null && !t.meta.has(CoreApi)):
+            case TInst(_.get() => t, params) if (t.constructor != null && !t.meta.has(Metas.CoreApi)):
                 var outputComplex = output.toComplex();
                 var method = (macro be.types.Resolve.Method.fromResolve((null:$outputComplex))).typeof().sure();
                 
@@ -83,16 +104,17 @@ class Resolver {
                 }
 
             case x:
-                #if (debug && coerce_verbose)
-                trace( x );
-                #end
+                if (Debug && CoerceVerbose) {
+                    trace( x );
+                }
+
                 result = ConvertValue(input, output, expr);
 
         }
 
-        #if (debug && coerce_verbose)
-        trace( result );
-        #end
+        if (Debug && CoerceVerbose) {
+            trace( result );
+        }
 
         return result;
     }
@@ -103,20 +125,22 @@ class Resolver {
         var unified = false;
         var pos = Context.currentPos();
         
-        #if (debug && coerce_verbose)
-        trace( signature.toComplex().toString() );
-        trace( module.toComplex().toString() );
-        trace( statics );
-        #end
+        if (Debug && CoerceVerbose) {
+            trace( signature.toComplex().toString() );
+            trace( module.toComplex().toString() );
+            trace( statics );
+        }
 
         switch signature {
             case TFun(args, ret):
                 var moduleID = module.getID();
-                #if (debug && coerce_verbose)
-                trace( moduleID );
-                trace( args );
-                trace( ret );
-                #end
+
+                if (Debug && CoerceVerbose) {
+                    trace( moduleID );
+                    trace( args );
+                    trace( ret );
+                }
+
                 var fields:Array<{name:String, type:Type}> = switch module {
                     case TInst(_.get() => t, params):
                         statics ? t.statics.get() : t.fields.get();
@@ -131,16 +155,17 @@ class Resolver {
                         ]);
 
                     case x:
-                        #if (debug && coerce_verbose)
-                        trace(x);
-                        #end
+                        if (Debug && CoerceVerbose) {
+                            trace(x);
+                        }
+
                         [];
 
                 }
 
-                #if (debug && coerce_verbose)
-                trace( fields.map( f->f.name ) );
-                #end
+                if (Debug && CoerceVerbose) {
+                    trace( fields.map( f->f.name ) );
+                }
                 
                 var matches = [];
 
@@ -151,9 +176,9 @@ class Resolver {
 
                 }
 
-                #if (debug && coerce_verbose)
-                trace( matches.map( f->f.name ) );
-                #end
+                if (Debug && CoerceVerbose) {
+                    trace( matches.map( f->f.name ) );
+                }
 
                 result = matches;
 
@@ -170,13 +195,14 @@ class Resolver {
         var inputID = input.getID();
         var outputID = output.getID();
 
-        #if (debug && coerce_verbose)
-        trace( input );
-        trace( output );
-        trace( value.toString() );
-        trace( inputID );
-        trace( outputID );
-        #end
+        if (Debug && CoerceVerbose) {
+            trace( input );
+            trace( output );
+            trace( value.toString() );
+            trace( inputID );
+            trace( outputID );
+        }
+        
         if (typeMap.exists( inputID )) {
             var sub = typeMap.get( inputID );
             if (sub.exists( outputID )) {
@@ -191,9 +217,11 @@ class Resolver {
             var emptyArray = (macro new Array()).typeof().sure();
             var matchesArray = emptyArray.unify(output);
             var unified = input.unify(output);
-            #if (debug && coerce_verbose)
-            trace( matchesArray, unified, matchesArray && unified );
-            #end
+
+            if (Debug && CoerceVerbose) {
+                trace( matchesArray, unified, matchesArray && unified );
+            }
+
             if (unified) {
                 result = macro @:pos(value.pos) ($value:$outputComplex);
 
@@ -207,9 +235,11 @@ class Resolver {
             var inputComplex = input.toComplex();
             var outputComplex = output.toComplex();
             var signature = (macro:$inputComplex->$outputComplex).toType().sure();
-            #if (debug && coerce_verbose)
-            trace( signature );
-            #end
+
+            if (Debug && CoerceVerbose) {
+                trace( signature );
+            }
+
             var tmp:Expr = null;
             var error:Error = null;
 

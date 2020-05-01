@@ -8,8 +8,8 @@ import haxe.macro.Type;
 import haxe.macro.Type.ClassField;
 import haxe.macro.Expr.ComplexType;
 import be.coerce.Errors;
+import haxe.macro.Defines;
 import be.macros.Resolver;
-import be.coerce.Metadata;
 import be.coerce.ResolveTask;
 
 using haxe.macro.Context;
@@ -58,9 +58,11 @@ abstract Method<T:Function>(Function) from Function to Function {
 
         }
         if (result == null) Context.fatalError( TotalFailure, expr.pos );
-        #if (debug && coerce_verbose)
-        trace(result.toString());
-        #end
+        
+        if (Debug && CoerceVerbose) {
+            trace(result.toString());
+        }
+
         return result;
     }
 
@@ -77,9 +79,11 @@ abstract Method<T:Function>(Function) from Function to Function {
                 Context.fatalError( UseResolve, expr.pos );
         }
         if (result == null) Context.fatalError( TotalFailure, expr.pos );
-        #if (debug && coerce_verbose)
-        trace(result.toString());
-        #end
+
+        if (Debug && CoerceVerbose) {
+            trace(result.toString());
+        }
+
         return result;
     }
 
@@ -111,9 +115,11 @@ abstract Method<T:Function>(Function) from Function to Function {
 
         }
         if (result == null) Context.fatalError( TotalFailure, expr.pos );
-        #if (debug && coerce_verbose)
-        trace(result.toString());
-        #end
+
+        if (Debug && CoerceVerbose) {
+            trace(result.toString());
+        }
+
         return result;
     }
 

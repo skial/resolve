@@ -1,5 +1,7 @@
 -lib tink_macro
 -lib tink_unittest
+-lib haxe.macro.Metas
+-lib haxe.macro.Defines
 
 -cp src
 -cp tests
