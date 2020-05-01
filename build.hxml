@@ -1,5 +1,7 @@
 -lib tink_macro
 -lib tink_unittest
+-lib haxe.macro.Metas
+-lib haxe.macro.Defines
 
 -cp src
 -cp tests
@@ -8,7 +10,7 @@
 
 -D eval-stack
 -D analyzer-optimize
--D coerce-verbose
+#-D coerce-verbose
 
 -main Entry
 

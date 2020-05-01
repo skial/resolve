@@ -85,8 +85,4 @@ class PickBuilder {
         });
     }
 
-    public static function foo(expr:Expr):Expr {
-        return macro {};
-    }
-
 }
