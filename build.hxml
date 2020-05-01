@@ -1,4 +1,5 @@
 -lib tink_macro
+-lib tink_unittest
 
 -cp src
 -cp tests
@@ -15,4 +16,5 @@
 
 --each
 
+-lib hxnodejs
 -js bin/co.js
