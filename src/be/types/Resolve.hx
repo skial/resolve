@@ -7,6 +7,8 @@ import haxe.macro.*;
 import haxe.macro.Type;
 import haxe.macro.Type.ClassField;
 import haxe.macro.Expr.ComplexType;
+import be.coerce.Errors;
+import be.coerce.Metadata;
 import be.coerce.ResolveTask;
 
 using haxe.macro.Context;
@@ -25,22 +27,6 @@ abstract Method<T:Function>(Function) from Function to Function {
     }
     @:to public function toResolve():Resolve<T, ~//i> return cast this;
 }
-
-#if (eval || macro)
-
-@:notNull @:forward @:forwardStatics enum abstract Metadata(String) from String to String {
-    public var CoreApi = ':coreApi';
-    public var CoreType = ':coreType';
-}
-
-@:notNull @:forward @:forwardStatics enum abstract Errors(String) from String to String {
-    public var NoMatches = 'No vailid matches have been found.';
-    public var UseCoerce = 'Use `Resolve.coerce` instead.';
-    public var UseResolve = 'Use `Resolve.resolve` instead.';
-    public var NotFunction = 'Signature should be a function.';
-    public var TotalFailure = 'No expression can be found or constructed.';
-}
-#end
 
 @:callable @:notNull abstract Resolve<T:Function, @:const R:EReg>(T) to T {
 
