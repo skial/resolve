@@ -3,10 +3,8 @@ package be.types;
 import haxe.Constraints.Function;
 
 #if (eval || macro)
-import haxe.macro.*;
 import haxe.macro.Type;
-import haxe.macro.Type.ClassField;
-import haxe.macro.Expr.ComplexType;
+import haxe.macro.Expr;
 import be.coerce.Errors;
 import haxe.macro.Defines;
 import be.macros.Resolver;
@@ -134,7 +132,7 @@ abstract Method<T:Function>(Function) from Function to Function {
                         } else if (matches.length > 0) {
                             while (matches.length > 0) {
                                 var field = matches.pop();
-                                
+
                                 if (field.type.unify(signature)) {
                                     result = e.field( field.name );
                                     break;

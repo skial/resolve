@@ -4,7 +4,6 @@ import be.types.Pick;
 import be.types.Resolve;
 import be.types.Resolve.resolve;
 
-// TODO might need to add a follow somewhere 
 typedef Addable = Resolve<Int->Int->Int, ~/(add(able|ition)|plus)/i, ~/@:op\(([a-z ]+\+[a-z ]+)\)/i>;
 
 @:asserts
@@ -71,9 +70,9 @@ class ReEntry {
     public static function fakeParseInt1(v:String):Int return 10000;
     public static function fakeParseInt2(v:String):Int return 20000;
 
-    public static inline function callStringInt(func:Resolve<String->Int, ~/int(2)?/i, ~//>, v:String):Int return func(v);
+    public static inline function callStringInt(func:Resolve<String->Int, ~/int(2)?/i, ~//i>, v:String):Int return func(v);
 
-    public static inline function asInt(r:Resolve<String->Int, ~/int/i, ~//>, v:String):Int return r(v);
+    public static inline function asInt(r:Resolve<String->Int, ~/int/i, ~//i>, v:String):Int return r(v);
 
     @:generic public static function typeParam<In, Out>(r:Resolve<In->Out, ~/mk/i, ~//i>, v:In):Out {
         return r(v);
@@ -82,10 +81,13 @@ class ReEntry {
 }
 
 class Fake {
+
     public var name:String;
+
     public function new(v:String) {
         name = v;
     }
+    
     public static function parseFloat(v:String):Float return 0.0;
     public static function falseSig(v:String):Int return throw 'This is skipped due to the `~/int/i` regular expression';
     public static function parseInt(v:String):Int return 1000;
@@ -95,24 +97,29 @@ class Fake {
         name += newName;
         return this;
     }
+
 }
 
 class Bake {
     public var name:String;
+
     public function new(v:String) {
         name = v;
     }
 
     public static function mk(v:String):Bake return new Bake(v);
+
 }
 
 class Cake {
     public var amount:Int;
+
     public function new(v:Int) {
         amount = v;
     }
 
     public static function mk(v:Int):Cake return new Cake(v);
+
 }
 
 class BarAddable {
