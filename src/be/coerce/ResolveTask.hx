@@ -13,7 +13,7 @@ enum ResolveTask {
         If it can resolve to a function, it will look for a matching type `signature`
         on `module`
     **/
-    SearchMethod(signature:Type, module:Type, statics:Bool, expr:Expr, ?ereg:EReg);
+    SearchMethod(signature:Type, module:Type, statics:Bool, expr:Expr, ?ereg:EReg, ?meta:EReg);
 
     /**
         var m:Date = coerce('2018-11-15');
