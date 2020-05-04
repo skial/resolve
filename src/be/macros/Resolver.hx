@@ -70,7 +70,7 @@ class Resolver {
             case TAnonymous(_.get() => {status:AClassStatics(ref)}):
                 var fieldEReg = null;
                 var metaEReg = null;
-                var outputComplex = output.toComplex();
+                var outputComplex = output.follow().toComplex();
                 var method = (macro be.types.Resolve.Method.fromResolve((null:$outputComplex))).typeof().sure();
                 // TODO this is just to force, I'm guessing, tink DirectTypes to real types.
                 var _signature = (macro (null:$outputComplex).get()).typeof();

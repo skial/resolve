@@ -5,7 +5,7 @@ import be.types.Resolve;
 import be.types.Resolve.resolve;
 
 // TODO might need to add a follow somewhere 
-//typedef Addable = Resolve<Int->Int->Int, ~/(add(able|ition)|plus)/i, ~/@:op\(([a-z ]+\+[a-z ]+)\i)/>;
+typedef Addable = Resolve<Int->Int->Int, ~/(add(able|ition)|plus)/i, ~/@:op\(([a-z ]+\+[a-z ]+)\)/i>;
 
 @:asserts
 class ResolveSpec {
@@ -47,6 +47,14 @@ class ResolveSpec {
 
     public function testResolve_metadata() {
         var m:Resolve<Int->Int->Int, ~/(add(able|ition)|plus)/i, ~/@:op\(([a-z ]+\+[a-z ]+)\)/i> = resolve(BarAddable);
+
+        asserts.assert( m(2, 2) == 11 );
+
+        return asserts.done();
+    }
+
+    public function testResolve_metadataViaTypedef() {
+        var m:Addable = resolve(BarAddable);
 
         asserts.assert( m(2, 2) == 11 );
 

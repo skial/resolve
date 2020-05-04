@@ -7,7 +7,7 @@ class Entry {
 
     public static function main() {
         Runner.run(TestBatch.make([
-            new CoerceSpec(),
+            //new CoerceSpec(),
             new ResolveSpec(),
         ])).handle( Runner.exit );
     }
