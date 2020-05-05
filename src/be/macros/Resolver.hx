@@ -233,21 +233,6 @@ class Resolver {
         return results;
     }
 
-    public static function copy(type:EnumValue):EnumValue {
-        trace( type.getName(), std.Type.enumIndex(type), std.Type.getEnum(type) );
-        var parent = std.Type.getEnum( type );
-        var index = std.Type.enumIndex( type );
-        var oldParams = std.Type.enumParameters( type ); 
-        var newParams = [for (param in oldParams) {
-            if (Reflect.isEnumValue(param)) {
-                copy( param );
-            } else {
-                Reflect.copy( param );
-            }
-        }];
-        return std.Type.createEnumIndex( parent, index, newParams );
-    }
-
     public static function convertValue(input:Type, output:Type, value:Expr):Promise<Expr> {
         var result = null;
         var inputID = input.getID();
