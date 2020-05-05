@@ -4,23 +4,22 @@ import be.types.Pick;
 import be.types.Resolve;
 import be.types.Resolve.resolve;
 
+typedef Addable = Resolve<Int->Int->Int, ~/(add(able|ition)|plus)/i, ~/@:op\(([a-z ]+\+[a-z ]+)\)/i>;
+
 @:asserts
 class ResolveSpec {
 
     public function new() {}
 
     public function testResolve_staticFields() {
-        var a:Resolve<String->Int, ~/int(2)?/i> = resolve(ReEntry);
+        var a:Resolve<String->Int, ~/int(2)?/i, ~//i> = resolve(ReEntry);
 
-        asserts.assert( ReEntry.foo(_ -> 1, '125') == 1 );
-        asserts.assert( ReEntry.foo(a, '124') == 20000 );
+        asserts.assert( ReEntry.callStringInt(_ -> 1, '125') == 1 );
+        asserts.assert( ReEntry.callStringInt(a, '124') == 20000 );
 
         var input = '999';
         asserts.assert( ReEntry.asInt(resolve(Std), input) == 999 );
         asserts.assert( ReEntry.asInt(resolve(Fake), input) == 1000 );
-
-        var fakey = new Fake('hello fake world.');
-
         asserts.assert( ReEntry.mkFake(resolve(Fake), input).name == input );
 
         return asserts.done();
@@ -45,6 +44,22 @@ class ResolveSpec {
         return asserts.done();
     }
 
+    public function testResolve_metadata() {
+        var m:Resolve<Int->Int->Int, ~/(add(able|ition)|plus)/i, ~/@:op\(([a-z ]+\+[a-z ]+)\)/i> = resolve(BarAddable);
+
+        asserts.assert( m(2, 2) == 11 );
+
+        return asserts.done();
+    }
+
+    public function testResolve_metadataViaTypedef() {
+        var m:Addable = resolve(BarAddable);
+
+        asserts.assert( m(2, 2) == 11 );
+
+        return asserts.done();
+    }
+
 }
 
 class ReEntry {
@@ -55,21 +70,24 @@ class ReEntry {
     public static function fakeParseInt1(v:String):Int return 10000;
     public static function fakeParseInt2(v:String):Int return 20000;
 
-    public static inline function foo(func:Resolve<String->Int, ~/int(2)?/i>, v:String):Int return func(v);
+    public static inline function callStringInt(func:Resolve<String->Int, ~/int(2)?/i, ~//i>, v:String):Int return func(v);
 
-    public static inline function asInt(r:Resolve<String->Int, ~/int/i>, v:String):Int return r(v);
+    public static inline function asInt(r:Resolve<String->Int, ~/int/i, ~//i>, v:String):Int return r(v);
 
-    #if static @:generic #end public static inline function typeParam<I, O>(r:Resolve<I->O, ~/mk/i>, v:I):O {
+    @:generic public static function typeParam<In, Out>(r:Resolve<In->Out, ~/mk/i, ~//i>, v:In):Out {
         return r(v);
     }
+
 }
 
-
 class Fake {
+
     public var name:String;
+
     public function new(v:String) {
         name = v;
     }
+    
     public static function parseFloat(v:String):Float return 0.0;
     public static function falseSig(v:String):Int return throw 'This is skipped due to the `~/int/i` regular expression';
     public static function parseInt(v:String):Int return 1000;
@@ -79,23 +97,47 @@ class Fake {
         name += newName;
         return this;
     }
-}
 
+}
 
 class Bake {
     public var name:String;
+
     public function new(v:String) {
         name = v;
     }
 
     public static function mk(v:String):Bake return new Bake(v);
+
 }
 
 class Cake {
     public var amount:Int;
+
     public function new(v:Int) {
         amount = v;
     }
 
     public static function mk(v:Int):Cake return new Cake(v);
+
+}
+
+class BarAddable {
+
+    public function new() {}
+
+    public static function bluff(a:Int, b:Int):Int {
+        throw 'WRONG 1';
+        return a + b;
+    }
+
+    @:op(A + OTHER) public static function obf123456789(a:Int, b:Int):Int {
+        return a*a + 1 + b*b + 2;
+    }
+
+    public static function bluffy(a:Int, b:Int):Int {
+        throw 'WRONG 2';
+        return a + b;
+    }
+
 }

@@ -2,13 +2,13 @@ package be.macros;
 
 import haxe.macro.*;
 import haxe.macro.Type;
-import haxe.macro.Type.ClassField;
-import haxe.macro.Expr.ComplexType;
+import haxe.macro.Expr;
 import haxe.macro.Metas;
 import haxe.macro.Defines;
 import be.coerce.Errors;
 import be.coerce.ResolveTask;
 
+using StringTools;
 using haxe.macro.Context;
 using tink.CoreApi;
 using tink.MacroApi;
@@ -60,47 +60,60 @@ class Resolver {
         var result = null;
         
         if (Debug && CoerceVerbose) {
-            trace( expr.toString() );
-            trace( input );
-            trace( output );
-            trace( input.reduce() );
+            trace( 'expression      :   ' + expr.toString() );
+            trace( 'input type      :   ' + input );
+            trace( 'input reduced   :   ' + input.reduce() );
+            trace( 'output type     :   ' + output );
         }
 
         switch input.reduce() {
             case TAnonymous(_.get() => {status:AClassStatics(ref)}):
-                var ereg = null;
-                var outputComplex = output.toComplex();
+                var fieldEReg = null;
+                var metaEReg = null;
+                var outputComplex = output.follow().toComplex();
                 var method = (macro be.types.Resolve.Method.fromResolve((null:$outputComplex))).typeof().sure();
-                // TODO this is just to force, I'm guessing, tink DirectTypes to real types.
+                // TODO this is just to force, I'm guessing, tink_macro DirectTypes to real types.
                 var _signature = (macro (null:$outputComplex).get()).typeof();
 
                 if (Debug && CoerceVerbose) {
-                    trace( ref );
-                    trace( outputComplex );
-                    trace( _signature );
-                    trace( outputComplex.toString() );
+                    trace( 'static class    :   ' + ref );
+                    trace( 'sig type        :   ' + _signature );
+                    trace( 'method type     :   ' + method );
+                    trace( 'output ctype    :   ' + outputComplex.toString() );
                 }
 
-                ereg = getEReg(outputComplex);
+                fieldEReg = getFieldEReg(outputComplex);
+                metaEReg = getMetaEReg(outputComplex);
 
                 if (output.unify(method)) {
                     var methodComplex = method.toComplex();
                     var signature = (macro ((null:$outputComplex):$methodComplex).toResolve().get()).typeof().sure();
                     
-                    result = SearchMethod(signature, TInst(ref, []), true, ref.toString().resolve(), ereg);
+                    if (Debug && CoerceVerbose) {
+                        trace( 'method ctype    :   ' + methodComplex.toString() );
+                        trace( 'sig ctype       :   ' + signature );
+                    }
+
+                    result = SearchMethod(signature, TInst(ref, []), true, ref.toString().resolve(), fieldEReg, metaEReg);
                 }
                 
             case TInst(_.get() => t, params) if (t.constructor != null && !t.meta.has(Metas.CoreApi)):
                 var outputComplex = output.toComplex();
                 var method = (macro be.types.Resolve.Method.fromResolve((null:$outputComplex))).typeof().sure();
                 
-                var ereg = getEReg(outputComplex);
+                var fieldEReg = getFieldEReg(outputComplex);
+                var metaEReg = getMetaEReg(outputComplex);
 
                 if (output.unify(method)) {
                     var methodComplex = method.toComplex();
                     var signature = (macro ((null:$outputComplex):$methodComplex).toResolve().get()).typeof().sure();
 
-                    result = SearchMethod(signature, input.reduce(), false, expr, ereg);
+                    if (Debug && CoerceVerbose) {
+                        trace( outputComplex.toString() );
+                        trace( signature );
+                    }
+
+                    result = SearchMethod(signature, input.reduce(), false, expr, fieldEReg, metaEReg);
                 }
 
             case x:
@@ -119,16 +132,16 @@ class Resolver {
         return result;
     }
 
-    public static function findMethod(signature:Type, module:Type, statics:Bool, ?ereg:EReg):Promise<Array<{name:String, type:Type}>> {
-        var result = [];
-        var isArray = false;
-        var unified = false;
-        var pos = Context.currentPos();
+    public static function findMethod(signature:Type, module:Type, statics:Bool, pos:Position, ?fieldEReg:EReg, ?metaEReg:EReg):Promise<Array<{name:String, type:Type}>> {
+        var results = [];
+        var blankField = fieldEReg == null || '$fieldEReg'.startsWith('~//');
+        var blankMeta = metaEReg == null || '$metaEReg'.startsWith('~//');
         
         if (Debug && CoerceVerbose) {
-            trace( signature.toComplex().toString() );
-            trace( module.toComplex().toString() );
-            trace( statics );
+            trace( 'sig         :   ' + signature );
+            trace( 'use statics :   ' + statics );
+            trace( 'field ereg  :   ' + fieldEReg );
+            trace( 'meta ereg   :   ' + metaEReg );
         }
 
         switch signature {
@@ -137,21 +150,24 @@ class Resolver {
 
                 if (Debug && CoerceVerbose) {
                     trace( moduleID );
-                    trace( args );
-                    trace( ret );
+                    trace( 'args: ' + args );
+                    trace( 'return type: ' + ret );
                 }
 
-                var fields:Array<{name:String, type:Type}> = switch module {
+                var fields:Array<{name:String, type:Type, meta:Metadata}> = switch module {
                     case TInst(_.get() => t, params):
-                        statics ? t.statics.get() : t.fields.get();
+                        var fs = statics ? t.statics.get() : t.fields.get();
+                        fs.map( f -> {name:f.name, type:f.type, meta:f.meta.get()} );
 
                     case TAbstract(_.get() => t, params):
                         [for (f in t.from) 
-                            (f.field == null) ? {name:'', type:f.t} : f.field
+                            (f.field == null) 
+                                ? {name:'', type:f.t, meta:[]} 
+                                : {name:f.field.name, type:f.field.type, meta:f.field.meta.get()}
                         ]
                         .concat([
                         for(f in t.binops)
-                            f.field
+                            {name:f.field.name, type:f.field.type, meta:f.field.meta.get()}
                         ]);
 
                     case x:
@@ -164,36 +180,64 @@ class Resolver {
                 }
 
                 if (Debug && CoerceVerbose) {
-                    trace( fields.map( f->f.name ) );
+                    trace( 'checking    :   ' + fields.map( f->f.name ) );
                 }
-                
-                var matches = [];
 
-                if (fields.length > 0) for (field in fields) {
-                    var eregMatch = true;
-                    if (ereg != null) eregMatch = ereg.match(field.name);
-                    if (eregMatch && field.type.unify(signature)) matches.push( field );
+                haxe.ds.ArraySort.sort( fields, (f1, f2) -> {
+                    var fieldMatch = blankField;
+                    var metaMatch = blankMeta;
+                    
+                    var f1total = 0;
+                    var f2total = 0;
 
-                }
+                    if (!fieldMatch) {
+                        switch [fieldEReg.match(f1.name), fieldEReg.match(f2.name)] {
+                            case [true, false]: f1total++;
+                            case [false, true]: f2total++;
+                            case _:
+                        }
+
+                    }
+
+                    if (!metaMatch) {
+                        for (meta in f1.meta) {
+                            var str = meta.toString();
+                            if (metaEReg.match( str )) f1total++;
+                        }
+
+                        for (meta in f2.meta) {
+                            var str = meta.toString();
+                            if (metaEReg.match( str )) f2total++;
+                        }
+
+                    }
+
+                    if (Debug && CoerceVerbose) {
+                        trace( f1.name, f2.name, f1total, f2total, f1total - f2total );
+                    }
+
+                    return f1total - f2total;
+                } );
 
                 if (Debug && CoerceVerbose) {
-                    trace( matches.map( f->f.name ) );
+                    trace( 'sorted      :   ' + fields.map( f->f.name ) );
                 }
 
-                result = matches;
+                results = fields;
 
             case x:
                 return new Error( NotFound, NotFunction + ' Not ${x.getID()}', pos );
 
         }
 
-        return result;
+        return results;
     }
 
     public static function convertValue(input:Type, output:Type, value:Expr):Promise<Expr> {
         var result = null;
         var inputID = input.getID();
         var outputID = output.getID();
+        var position = value.pos;
 
         if (Debug && CoerceVerbose) {
             trace( input );
@@ -243,7 +287,7 @@ class Resolver {
             var tmp:Expr = null;
             var error:Error = null;
 
-            findMethod(signature, output, true).handle( function(o) switch o {
+            findMethod(signature, output, true, position).handle( function(o) switch o {
                 case Success(matches):
                     if (matches.length > 0) {
                         tmp = outputID.resolve().field(matches[matches.length-1].name);
@@ -268,12 +312,31 @@ class Resolver {
         return result;
     }
 
-    public static function getEReg(ctype:ComplexType):Null<EReg> {
+    public static function getFieldEReg(ctype:ComplexType):Null<EReg> {
         var result = null;
 
         switch ctype {
             case TPath( {params:p} ) if (p != null && p.length > 1):
                 switch p[1] {
+                    case TPExpr(_.expr => EConst(CRegexp(r, o))):
+                        result = new EReg(r, o);
+
+                    case _:
+                }
+
+            case _:
+
+        }
+
+        return result;
+    }
+
+    public static function getMetaEReg(ctype:ComplexType):Null<EReg> {
+        var result = null;
+
+        switch ctype {
+            case TPath( {params:p} ) if (p != null && p.length > 1):
+                switch p[2] {
                     case TPExpr(_.expr => EConst(CRegexp(r, o))):
                         result = new EReg(r, o);
 

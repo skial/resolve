@@ -1,6 +1,8 @@
 package be.macros;
 
 import haxe.macro.Type;
+import haxe.macro.Defines;
+import be.macros.Resolver.LocalDefines;
 import haxe.macro.Expr.TypePath;
 import haxe.macro.Expr.ComplexType;
 import haxe.macro.*;
@@ -29,7 +31,8 @@ class PickBuilder {
             var signatureType = null;
             var signatureComplex = null;
             var reg = null;
-            var ereg = macro ~//;
+            var fieldEReg = macro ~//i;
+            var metaEReg = macro ~//i;
             var filter:EReg = null;
             var ctor = 'be.types.$typeName'.asTypePath();
             
@@ -43,13 +46,14 @@ class PickBuilder {
                     case TInst(_.get() => {kind:KExpr( e = {expr:EConst( CRegexp(r, opt) ), pos:pos} )}, _):
                         reg = {r:r, opt:opt};
                         filter = new EReg(r, opt);
-                        ereg = e;
+                        fieldEReg = e;
 
                     case x:
-                        #if (debug && coerce_verbose)
-                        trace( x );
-                        #end
+                        if (Defines.Debug && CoerceVerbose) {
+                            trace( x );
+                        }
                 }
+
             }
 
             var ctype = macro:be.types.Resolve<$signatureComplex>;
@@ -63,12 +67,15 @@ class PickBuilder {
             
             switch ctype {
                 case TPath({params:params}):
-                    // Manually insert TPExpr as `macro:be.types.Resolve<$signatureComplex, $ereg>` fails
-                    params.push( TPExpr(ereg) );
+                    // Manually insert TPExpr as `macro:be.types.Resolve<$signatureComplex, $fieldEReg, $metaEReg>` fails
+                    params.push( TPExpr(fieldEReg) ); // field name regular expression.
+                    params.push( TPExpr(metaEReg) ); // field metadata regular expression.
 
                 case x:
                     trace(x);
+
             }
+
             td.kind = TDAbstract(ctype, [ctype], [ctype]);
             td.meta = [
                 {name:':forward', params:[], pos:ctx.pos}, 
@@ -77,9 +84,9 @@ class PickBuilder {
                 {name:':callable', params:[], pos:ctx.pos}
             ];
 
-            #if (debug && coerce_verbose)
-            trace( new Printer().printTypeDefinition(td) );
-            #end
+            if (Defines.Debug && CoerceVerbose) {
+                trace( new Printer().printTypeDefinition(td) );
+            }
 
             return td;
         });
