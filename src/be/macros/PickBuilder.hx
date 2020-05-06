@@ -30,10 +30,8 @@ class PickBuilder {
             var signature = null;
             var signatureType = null;
             var signatureComplex = null;
-            var reg = null;
-            var fieldEReg = macro ~//i;
-            var metaEReg = macro ~//i;
-            var filter:EReg = null;
+            var fieldEReg:Expr = macro ~//i;
+            var metaEReg:Expr = macro ~//i;
             var ctor = 'be.types.$typeName'.asTypePath();
             
             for (type in ctx.types) {
@@ -43,10 +41,13 @@ class PickBuilder {
                         signatureType = type;
                         signatureComplex = signatureType.toComplex();
 
-                    case TInst(_.get() => {kind:KExpr( e = {expr:EConst( CRegexp(r, opt) ), pos:pos} )}, _):
-                        reg = {r:r, opt:opt};
-                        filter = new EReg(r, opt);
+                    // @see https://haxe.org/manual/expression.html#define-identifier
+                    // Checking for `@` in ereg _should_ be safe to detect metadata ereg's.
+                    case TInst(_.get() => {kind:KExpr( e = {expr:EConst( CRegexp(r, opt) ), pos:pos} )}, _) if (fieldEReg != null && r.indexOf('@') == -1):
                         fieldEReg = e;
+
+                    case TInst(_.get() => {kind:KExpr( e = {expr:EConst( CRegexp(r, opt) ), pos:pos} )}, _) if (metaEReg != null && r.indexOf('@') > -1):
+                        metaEReg = e;
 
                     case x:
                         if (Defines.Debug && CoerceVerbose) {
@@ -56,20 +57,23 @@ class PickBuilder {
 
             }
 
+            if (fieldEReg == null) fieldEReg = macro ~//i;
+            if (metaEReg == null) metaEReg = macro ~//i;
+
             var ctype = macro:be.types.Resolve<$signatureComplex>;
             var td = macro class $typeName {
                 public inline function new(v:$ctype) this = v;
-                @:to public inline function toResolve():$signatureComplex return this;
-                //@:to public inline function toFunction() return this.get();
+                public inline function asResolve():$ctype return this;
+                @:to public inline function asFunc():$signatureComplex return this;
                 @:from public static inline function fromResolve(r:$ctype) return new $ctor(r);
                 @:from public static inline function fromFunc(r:$signatureComplex) return new $ctor(r);
             }
             
             switch ctype {
                 case TPath({params:params}):
-                    // Manually insert TPExpr as `macro:be.types.Resolve<$signatureComplex, $fieldEReg, $metaEReg>` fails
-                    params.push( TPExpr(fieldEReg) ); // field name regular expression.
-                    params.push( TPExpr(metaEReg) ); // field metadata regular expression.
+                    // Manually insert TPExpr, as `macro:be.types.Resolve<$signatureComplex, $fieldEReg, $metaEReg>` fails.
+                    params.push( TPExpr(fieldEReg) );   // field name regular expression.
+                    params.push( TPExpr(metaEReg) );    // field metadata regular expression.
 
                 case x:
                     trace(x);
