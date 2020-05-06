@@ -58,6 +58,12 @@ class Resolver {
 
     public static function determineTask(expr:Expr, input:Type, output:Type):ResolveTask {
         var result = null;
+
+        // Yes this is a lazy hack but its for future me.
+        if ('$output'.indexOf('TAbstract(be.types.Pick') > -1) {
+            var c = output.toComplex();
+            output = Context.typeof(macro (null:$c).asResolve());
+        }
         
         if (Debug && CoerceVerbose) {
             trace( 'expression      :   ' + expr.toString() );
@@ -84,6 +90,11 @@ class Resolver {
 
                 fieldEReg = getFieldEReg(outputComplex);
                 metaEReg = getMetaEReg(outputComplex);
+
+                if (Debug && CoerceVerbose) {
+                    trace( 'field ereg      :   ' + fieldEReg );
+                    trace( 'meta ereg       :   ' + metaEReg );
+                }
 
                 if (output.unify(method)) {
                     var methodComplex = method.toComplex();

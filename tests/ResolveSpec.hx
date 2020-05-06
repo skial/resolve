@@ -1,6 +1,5 @@
 package ;
 
-import be.types.Pick;
 import be.types.Resolve;
 import be.types.Resolve.resolve;
 
@@ -64,7 +63,7 @@ class ResolveSpec {
 
 class ReEntry {
 
-    public static inline function mkFake(r:Pick<String->Fake>, v:String):Fake return r(v);
+    public static inline function mkFake(r:Resolve<String->Fake, ~//i, ~//i>, v:String):Fake return r(v);
 
     public static function fake(v:String):Int return throw 'bugger';
     public static function fakeParseInt1(v:String):Int return 10000;

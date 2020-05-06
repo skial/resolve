@@ -9,6 +9,7 @@ class Entry {
         Runner.run(TestBatch.make([
             new CoerceSpec(),
             new ResolveSpec(),
+            new PickSpec(),
         ])).handle( Runner.exit );
     }
 
