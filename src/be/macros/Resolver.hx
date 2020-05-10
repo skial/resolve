@@ -81,6 +81,7 @@ class Resolver {
                 var metaEReg:EReg = getMetaEReg(outputComplex);
 
                 if (Debug && CoerceVerbose) {
+                    trace( 'static abstract class' );
                     trace( 'static class    :   ' + clsr );
                     trace( 'abstract type   :   ' + absr );
                     trace( 'sig type        :   ' + _signature );
@@ -111,6 +112,7 @@ class Resolver {
                 var metaEReg:EReg = getMetaEReg(outputComplex);
 
                 if (Debug && CoerceVerbose) {
+                    trace( 'static class' );
                     trace( 'static class    :   ' + ref );
                     trace( 'sig type        :   ' + _signature );
                     trace( 'method type     :   ' + method );
@@ -143,11 +145,35 @@ class Resolver {
                     var signature = (macro ((null:$outputComplex):$methodComplex).toResolve().get()).typeof().sure();
 
                     if (Debug && CoerceVerbose) {
+                        trace( 'class instance' );
                         trace( outputComplex.toString() );
                         trace( signature );
                     }
 
                     result = SearchMethod(signature, input.reduce(), false, expr, fieldEReg, metaEReg);
+                }
+
+            case TAbstract(ref = _.get() => abs, params):
+                var outputComplex = output.toComplex();
+                var method = (macro be.types.Resolve.Method.fromResolve((null:$outputComplex))).typeof().sure();
+                
+                var fieldEReg = getFieldEReg(outputComplex);
+                var metaEReg = getMetaEReg(outputComplex);
+
+                if (output.unify(method)) {
+                    var methodComplex = method.toComplex();
+                    var signature = (macro ((null:$outputComplex):$methodComplex).toResolve().get()).typeof().sure();
+
+                    if (Debug && CoerceVerbose) {
+                        trace( 'abstract instance' );
+                        trace( outputComplex.toString() );
+                        trace( signature );
+                    }
+
+                    result = Multiple([
+                        SearchMethod(signature, input.reduce(), false, expr, fieldEReg, metaEReg),
+                        SearchMethod(signature, TAbstract(ref, params), true, ref.toString().resolve(), fieldEReg, metaEReg)
+                    ]);
                 }
 
             case x:
@@ -212,6 +238,8 @@ class Resolver {
                         [];
 
                 }
+
+                fields = fields.filter( f -> f.name != '' );
 
                 if (Debug && CoerceVerbose) {
                     trace( 'checking    :   ' + fields.map( f->f.name ) );

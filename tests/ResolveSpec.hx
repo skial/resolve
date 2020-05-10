@@ -10,6 +10,18 @@ class ResolveSpec {
 
     public function new() {}
 
+    public function testResolve_functionType() {
+        var p:Resolve<String->String, ~//i, ~//i> = ReFoo;
+
+        asserts.assert( p('foooooo') == 'str: foooooo' );
+
+        p = Std;
+
+        asserts.assert( p('foooooo') == 'foooooo' );
+
+        return asserts.done();
+    }
+
     public function testResolve_staticFields() {
         var a:Resolve<String->Int, ~/int(2)?/i, ~//i> = resolve(ReEntry);
 
@@ -30,7 +42,7 @@ class ResolveSpec {
         var fakey = new Fake(fakeString);
         var expected = '$fakeString$input';
 
-        asserts.assert( ReEntry.mkFake(resolve(fakey), input).name == expected );
+        asserts.assert( ReEntry.mkFake(fakey, input).name == expected );
 
         return asserts.done();
     }
@@ -75,6 +87,20 @@ class ReEntry {
 
     @:generic public static function typeParam<In, Out>(r:Resolve<In->Out, ~/mk/i, ~//i>, v:In):Out {
         return r(v);
+    }
+
+}
+
+class ReFoo {
+
+    public static function echo(str:String):String {
+        return 'str: $str';
+    }
+
+    public static function mkInt(string:String):Int {
+        var total = 0;
+        for (i in 0...string.length) total += string.charCodeAt(i);
+        return total;
     }
 
 }
