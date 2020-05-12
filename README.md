@@ -1,19 +1,20 @@
 # coerce
 
-Types to select functions based on method signatures.
+An `abstract` type to help filter and select functions based on method signatures and regular expressions for naming schemes and metadata.
 
 ### Types
 
 #### `Resolve`
 
 ```haxe
-abstract Resolve<T:Function, @:const R:EReg> {
-    @:from static function coerce<In, Out>(expr:ExprOf<In>):ExprOf<Out>;
-    @:from static function resolve<Int, Out:Function>(expr:ExprOf<Class<Int>>):ExprOf<Out>;
+abstract Resolve<T:Function, @:const R:EReg, @:const M:EReg> {
+    static function coerce<In, Out>(expr:ExprOf<In>):ExprOf<Out>;
+    static function resolve<Int, Out:Function>(expr:ExprOf<Class<Int>>):ExprOf<Out>;
 }
 ```
 
-##### _Parsing one type to another_
+##### `Resolve.coerce`
+
 ```haxe
 import be.types.Resolve.coerce;
 
@@ -25,32 +26,37 @@ class Main {
         var aDate:Date = coerce( input );
         var aFake:Fake = coerce( input );
 
-        trace( aInt /*2018*/, aFloat /*2018*/, aDate /*Novemeber 15th 2018*/, aFake /* {name:"2018-11-15"} */ );
+        trace( 
+            aInt    /*2018*/, 
+            aFloat  /*2018*/, 
+            aDate   /*Novemeber 15th 2018*/, 
+            aFake   /* {name:"2018-11-15"} */
+        );
     }
+
 }
 
 class Fake {
     var name:String;
-    public function new(v:String) {
-        name = v;
-    }
+    public function new(v:String) name = v;
     public static function mkFake(v:String):Fake return new Fake(v);
 }
 ```
 
-##### _Filter static methods based on type signature._
+##### `Resolve.resolve`
+
 ```haxe
 import be.types.Resolve.resolve;
 
 class Main {
     public static function main() {
         var input = '999';
-        trace( asInt(resolve(Std), input) );     // trace(999);
-        trace( asInt(resolve(Fake), input) );    // trace(1000);
-        trace( asInt(_ -> 1, '125') );          // trace(1);
+        trace( asInt(Std, input) );     // trace(999);
+        trace( asInt(Fake, input) );    // trace(1000);
+        trace( asInt(_ -> 1, '125') );  // trace(1);
     }
 
-    public static inline function asInt(r:Resolve<String->Int, ~/int/i>, v:String):Int return r(v);
+    public static inline function asInt(r:Resolve<String->Int, ~/int/i, ~//>, v:String):Int return r(v);
 }
 
 class Fake {
@@ -62,7 +68,7 @@ class Fake {
 
 #### `Pick`
 
-`Pick` is a `@:genericBuild` macro which wraps `Resolve` making it a more friendly type to work with. 
+`Pick` is a `@:genericBuild` macro which creates a `Resolve` making it a more friendly type to work with. 
 `Pick` only requires the type signature.
 
 ```haxe
@@ -72,8 +78,8 @@ import be.types.Resolve.resolve;
 class Main {
     public static function main() {
         var input = '999';
-        trace( asInt(resolve(Std), input) );     // trace(999);
-        trace( asInt(resolve(Fake), input) );    // trace(1000);
+        trace( asInt(Std, input) );     // trace(999);
+        trace( asInt(Fake, input) );    // trace(1000);
     }
 
     public static function asInt(r:Pick<String->Int>, v:String):Int return r(v);
@@ -84,10 +90,6 @@ class Fake {
     public static function parseInt(v:String):Int return 1000;
 }
 ```
-
-### Notes
-
-- It's recommended to `import be.type.Resolve.resolve` and to wrap classes in `resolve` to avoid false autocompletion errors.
 
 ### Defines
 

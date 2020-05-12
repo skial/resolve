@@ -262,13 +262,14 @@ class Resolver {
                     }
 
                     if (!metaMatch) {
+                        var printer = new haxe.macro.Printer();
                         for (meta in f1.meta) {
-                            var str = meta.toString();
+                            var str = printer.printMetadata(meta);
                             if (metaEReg.match( str )) f1total++;
                         }
 
                         for (meta in f2.meta) {
-                            var str = meta.toString();
+                            var str = printer.printMetadata(meta);
                             if (metaEReg.match( str )) f2total++;
                         }
 
