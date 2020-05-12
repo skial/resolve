@@ -73,25 +73,50 @@ class Resolver {
         }
 
         switch input.reduce() {
+            case TAnonymous(_.get() => {status:AClassStatics(clsr = _.get() => ({kind:KAbstractImpl(absr)}) )}):
+                var outputComplex = output.follow().toComplex();
+                var method = (macro be.types.Resolve.Method.fromResolve((null:$outputComplex))).typeof().sure();
+                var _signature = (macro (null:$outputComplex).get()).typeof();
+                var fieldEReg:EReg = getFieldEReg(outputComplex);
+                var metaEReg:EReg = getMetaEReg(outputComplex);
+
+                if (Debug && CoerceVerbose) {
+                    trace( 'static abstract class' );
+                    trace( 'static class    :   ' + clsr );
+                    trace( 'abstract type   :   ' + absr );
+                    trace( 'sig type        :   ' + _signature );
+                    trace( 'method type     :   ' + method );
+                    trace( 'output ctype    :   ' + outputComplex.toString() );
+                    trace( 'field ereg      :   ' + fieldEReg );
+                    trace( 'meta ereg       :   ' + metaEReg );
+                }
+
+                if (output.unify(method)) {
+                    var methodComplex = method.toComplex();
+                    var signature = (macro ((null:$outputComplex):$methodComplex).toResolve().get()).typeof().sure();
+                    
+                    if (Debug && CoerceVerbose) {
+                        trace( 'method ctype    :   ' + methodComplex.toString() );
+                        trace( 'sig ctype       :   ' + signature );
+                    }
+
+                    result = SearchMethod(signature, TAbstract(absr, []), true, absr.toString().resolve(), fieldEReg, metaEReg);
+                }
+
             case TAnonymous(_.get() => {status:AClassStatics(ref)}):
-                var fieldEReg = null;
-                var metaEReg = null;
                 var outputComplex = output.follow().toComplex();
                 var method = (macro be.types.Resolve.Method.fromResolve((null:$outputComplex))).typeof().sure();
                 // TODO this is just to force, I'm guessing, tink_macro DirectTypes to real types.
                 var _signature = (macro (null:$outputComplex).get()).typeof();
+                var fieldEReg:EReg = getFieldEReg(outputComplex);
+                var metaEReg:EReg = getMetaEReg(outputComplex);
 
                 if (Debug && CoerceVerbose) {
+                    trace( 'static class' );
                     trace( 'static class    :   ' + ref );
                     trace( 'sig type        :   ' + _signature );
                     trace( 'method type     :   ' + method );
                     trace( 'output ctype    :   ' + outputComplex.toString() );
-                }
-
-                fieldEReg = getFieldEReg(outputComplex);
-                metaEReg = getMetaEReg(outputComplex);
-
-                if (Debug && CoerceVerbose) {
                     trace( 'field ereg      :   ' + fieldEReg );
                     trace( 'meta ereg       :   ' + metaEReg );
                 }
@@ -120,11 +145,35 @@ class Resolver {
                     var signature = (macro ((null:$outputComplex):$methodComplex).toResolve().get()).typeof().sure();
 
                     if (Debug && CoerceVerbose) {
+                        trace( 'class instance' );
                         trace( outputComplex.toString() );
                         trace( signature );
                     }
 
                     result = SearchMethod(signature, input.reduce(), false, expr, fieldEReg, metaEReg);
+                }
+
+            case TAbstract(ref = _.get() => abs, params):
+                var outputComplex = output.toComplex();
+                var method = (macro be.types.Resolve.Method.fromResolve((null:$outputComplex))).typeof().sure();
+                
+                var fieldEReg = getFieldEReg(outputComplex);
+                var metaEReg = getMetaEReg(outputComplex);
+
+                if (output.unify(method)) {
+                    var methodComplex = method.toComplex();
+                    var signature = (macro ((null:$outputComplex):$methodComplex).toResolve().get()).typeof().sure();
+
+                    if (Debug && CoerceVerbose) {
+                        trace( 'abstract instance' );
+                        trace( outputComplex.toString() );
+                        trace( signature );
+                    }
+
+                    result = Multiple([
+                        SearchMethod(signature, input.reduce(), false, expr, fieldEReg, metaEReg),
+                        SearchMethod(signature, TAbstract(ref, params), true, ref.toString().resolve(), fieldEReg, metaEReg)
+                    ]);
                 }
 
             case x:
@@ -190,6 +239,8 @@ class Resolver {
 
                 }
 
+                fields = fields.filter( f -> f.name != '' );
+
                 if (Debug && CoerceVerbose) {
                     trace( 'checking    :   ' + fields.map( f->f.name ) );
                 }
@@ -211,13 +262,14 @@ class Resolver {
                     }
 
                     if (!metaMatch) {
+                        var printer = new haxe.macro.Printer();
                         for (meta in f1.meta) {
-                            var str = meta.toString();
+                            var str = printer.printMetadata(meta);
                             if (metaEReg.match( str )) f1total++;
                         }
 
                         for (meta in f2.meta) {
-                            var str = meta.toString();
+                            var str = printer.printMetadata(meta);
                             if (metaEReg.match( str )) f2total++;
                         }
 

@@ -35,8 +35,11 @@ abstract Method<T:Function>(Function) from Function to Function {
     public static macro function resolve<In, Out:Function>(expr:ExprOf<Class<In>>):ExprOf<Out> {
         if (Debug && CoerceVerbose) {
             trace( 'start: resolve' );
+            trace( expr.toString() );
         }
+        
         var result:Expr = null;
+
         switch Resolver.determineTask( expr, expr.typeof().sure(), Context.getExpectedType() ) {
             case SearchMethod(signature, module, statics, e, fieldEReg, metaEReg): 
                 Resolver.findMethod(signature, module, statics, e.pos, fieldEReg, metaEReg).handle( function (o) switch o {
@@ -55,7 +58,6 @@ abstract Method<T:Function>(Function) from Function to Function {
                                 }
 
                             }
-                            //result = e.field( matches[matches.length - 1].name );
 
                         } else {
                             Context.fatalError( NoMatches, e.pos );
@@ -71,8 +73,9 @@ abstract Method<T:Function>(Function) from Function to Function {
                 Context.fatalError( UseCoerce, expr.pos );
 
         }
+
         if (result == null) Context.fatalError( TotalFailure, expr.pos );
-        
+
         if (Debug && CoerceVerbose) {
             trace(result.toString());
         }
@@ -83,6 +86,7 @@ abstract Method<T:Function>(Function) from Function to Function {
     public static macro function coerce<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
         if (Debug && CoerceVerbose) {
             trace( 'start: coerce' );
+            trace( expr.toString() );
         }
 
         var result:Expr = null;
@@ -108,15 +112,78 @@ abstract Method<T:Function>(Function) from Function to Function {
         return result;
     }
 
-    @:from private static macro function catchAll<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
+    @:noCompletion @:from public static macro function catchAll<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
         if (Debug && CoerceVerbose) {
             trace( 'start: catch all' );
+            trace( expr.toString() );
         }
 
         var task = Resolver.determineTask( expr, expr.typeof().sure(), Context.getExpectedType() );
         var result:Expr = null;
 
         switch task {
+            case Multiple(tasks):
+                var names:Array<String> = [];
+                var methods:Array<{name:String, type:Type, hits:Array<{sig:Type, expr:Expr}>}> = [];
+                
+                for (task in tasks) switch task {
+                    case Multiple(tasks):
+                        Context.fatalError( 'Nested `Multiple(tasks)` is not allowed.', expr.pos );
+
+                    case SearchMethod(signature, module, statics, e, fieldEReg, metaEReg):
+                        Resolver.findMethod(signature, module, statics, e.pos, fieldEReg, metaEReg).handle( function(o) switch o {
+                            case Success(matches):
+                                for (match in matches) {
+                                    var idx = names.indexOf(match.name);
+
+                                    if (idx == -1) {
+                                        names.push( match.name );
+                                        methods.push(
+                                            { name:match.name, type:match.type, hits:[ {sig:signature, expr:e} ] }
+                                        );
+
+                                    } else {
+                                        methods[idx].hits.push( {sig:signature, expr:e} );
+
+                                    }
+
+                                }
+        
+                            case Failure(error):
+                                Context.fatalError( error.message, error.pos );
+        
+                        } );
+
+                    case x:
+                        Context.fatalError( 'Not implemented: $x', expr.pos );
+
+                }
+
+                var matches = [for (_ => obj in methods) obj];
+                haxe.ds.ArraySort.sort(matches, (a, b) -> a.hits.length - b.hits.length );
+
+                if (matches.length == 0) {
+                    var field = matches[0];
+                    result = field.hits[field.hits.length - 1].expr.field( field.name );
+
+                } else if (matches.length > 0) {
+                    while (matches.length > 0) {
+                        var field = matches.pop();
+                        var last = field.hits[field.hits.length - 1];
+
+                        if (field.type.unify(last.sig)) {
+                            result = last.expr.field( field.name );
+                            break;
+
+                        }
+
+                    }
+
+                } else {
+                    Context.fatalError( NoMatches, expr.pos );
+
+                }
+
             case ConvertValue(input, output, value): 
                 Resolver.convertValue(input, output, value).handle( function(o) switch o {
                     case Success(expr): result = expr;
@@ -152,7 +219,14 @@ abstract Method<T:Function>(Function) from Function to Function {
                 } );
 
         }
-        if (result == null) Context.fatalError( TotalFailure, expr.pos );
+
+        if (result == null) {
+            Context.fatalError( TotalFailure, expr.pos );
+
+        }
+
+        // Not happy about `cast`ing this...
+        result = macro cast $result;
 
         if (Debug && CoerceVerbose) {
             trace(result.toString());

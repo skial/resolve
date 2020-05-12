@@ -11,7 +11,7 @@ enum ResolveTask {
         var m:Resolve<`signature`, `ereg`> = resolve(`module`);
         ---
         If it can resolve to a function, it will look for a matching type `signature`
-        on `module`
+        on `module`, sorted favoring matches against `ereg` & `meta`, if available.
     **/
     SearchMethod(signature:Type, module:Type, statics:Bool, expr:Expr, ?ereg:EReg, ?meta:EReg);
 
@@ -25,21 +25,9 @@ enum ResolveTask {
     ConvertValue(input:Type, output:Type, value:Expr);
 
     /**
-        var i:Int = 100;
-        var m:Resolve<Int->Int, ~/^(add(ition|able)?|plus)/i> = resolve(i);
+        The hint is in the name and type description.
         ---
-        var i:`input` = `expr`;
-        var m:Resolve<`signature`, `ereg`> = resolve(i);
-        ---
-        var i:Int = 100;
-        var i:`oldInput` = 100;
-        var m:Resolve<Int->Int, ~/^(add(ition|able)?|plus)/i> = resolve(be.types.int.Add.add.bind(i));
-        var m:Resolve<`signature`, `ereg`> = resolve((be.types.int.Add.add.bind(`expr`):`newInput`));
-        ---
-        CoreApi type promotion takes, in this case, an `Int` const, wraps it in
-        a specialist abstract, matching the required type.
-        
-        With `-dce full` this should be inlined when possible.
+        Currently only `SearchMethod` is supported.
     **/
-    //TypePromotion(expr:Expr, oldInput:Type, newInput:Type, signature:Type, ?ereg:EReg);
+    Multiple(tasks:Array<ResolveTask>);
 }
