@@ -6,4 +6,5 @@ package be.coerce;
     public var UseResolve = 'Use `Resolve.resolve` instead.';
     public var NotFunction = 'Signature should be a function.';
     public var TotalFailure = 'No expression can be found or constructed.';
+    public var NoNesting = 'Nested `Multiple(tasks)` is not allowed.';
 }
