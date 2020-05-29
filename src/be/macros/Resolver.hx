@@ -435,20 +435,25 @@ class Resolver {
                 trace( 'IN unify []     :   ' + inMatchesArray );
                 trace( 'OUT unify []    :   ' + outMatchesArray );
                 trace( 'unified         :   ' + unified );
-                trace( outMatchesArray && unified );
+                trace( 'out ctype       :   ' + outputComplex.toString() );
             }
 
             if (unified) {
-                result = macro @:pos(value.pos) ($value:$outputComplex);
+                result = macro @:pos(position) ($value:$outputComplex);
 
             } else if (outMatchesArray && !inMatchesArray) {
                 // Switch into the Array `<T>` type and fetch its parameter.
                 switch output {
                     case TInst(_, [t1]):
                         if (Debug && CoerceVerbose) trace( '[] `<T>`    :   ' + t1 );
-                        switch convertValue(input, t1, value) {
-                            case Success(r): result = macro @:pos(position) [$r];
-                            case Failure(e): Context.fatalError( e.toString(), position );
+
+                        switch convertValue(input, t1.follow(), value) {
+                            case Success(r): 
+                                result = macro @:pos(position) [$r];
+
+                            case Failure(e): 
+                                Context.fatalError( e.toString(), position );
+
                         }
 
                     case x:
@@ -461,12 +466,12 @@ class Resolver {
                 var t2 = output;
                 // Get each arrays `<T>` type.
                 switch input {
-                    case TInst(_, [t]): t1 = t;
+                    case TInst(_, [t]): t1 = t.follow();
                     case x: if (Debug && CoerceVerbose) trace( x );
                 }
 
                 switch output {
-                    case TInst(_, [t]): t2 = t;
+                    case TInst(_, [t]): t2 = t.follow();
                     case x: if (Debug && CoerceVerbose) trace( x );
                 }
 
