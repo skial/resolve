@@ -427,19 +427,57 @@ class Resolver {
 
         if (result == null) {
             var outputComplex = output.toComplexType();
-            var emptyArray = (macro new Array()).typeof().sure();
-            var matchesArray = emptyArray.unify(output);
+            var outMatchesArray = (macro new Array()).typeof().sure().unify(output);
+            var inMatchesArray = (macro new Array()).typeof().sure().unify(input);
             var unified = input.unify(output);
 
             if (Debug && CoerceVerbose) {
-                trace( matchesArray, unified, matchesArray && unified );
+                trace( 'IN unify []     :   ' + inMatchesArray );
+                trace( 'OUT unify []    :   ' + outMatchesArray );
+                trace( 'unified         :   ' + unified );
+                trace( outMatchesArray && unified );
             }
 
             if (unified) {
                 result = macro @:pos(value.pos) ($value:$outputComplex);
 
-            } else if (matchesArray) {
-                trace( matchesArray, outputComplex.toString() );
+            } else if (outMatchesArray && !inMatchesArray) {
+                // Switch into the Array `<T>` type and fetch its parameter.
+                switch output {
+                    case TInst(_, [t1]):
+                        if (Debug && CoerceVerbose) trace( '[] `<T>`    :   ' + t1 );
+                        switch convertValue(input, t1, value) {
+                            case Success(r): result = macro @:pos(position) [$r];
+                            case Failure(e): Context.fatalError( e.toString(), position );
+                        }
+
+                    case x:
+                        if (Debug && CoerceVerbose) trace( x );
+
+                }
+
+            } else if (inMatchesArray && outMatchesArray) {
+                var t1 = input;
+                var t2 = output;
+                // Get each arrays `<T>` type.
+                switch input {
+                    case TInst(_, [t]): t1 = t;
+                    case x: if (Debug && CoerceVerbose) trace( x );
+                }
+
+                switch output {
+                    case TInst(_, [t]): t2 = t;
+                    case x: if (Debug && CoerceVerbose) trace( x );
+                }
+
+                // Get the expr needed to convert from one type to another.
+                // Use `macro v` as the expr, as the mapping happens after this, if successful.
+                switch convertValue(t1, t2, macro v) {
+                    case Success(r): result = r;
+                    case Failure(e): Context.fatalError( e.toString(), position );
+                }
+
+                result = macro @:pos(position) $value.map(v->$result);
 
             }
         }

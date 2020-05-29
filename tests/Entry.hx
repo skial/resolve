@@ -12,6 +12,8 @@ class Entry {
             new coerce.StringBool(),
             new coerce.StringInt(),
             new coerce.StringFloat(),
+            new coerce.ArrayStringInt(),
+            new coerce.ArrayArray(),
             new resolver.StringSpec(),
             new resolver.ReassignSpec(),
             new resolver.ClassSpec(),
