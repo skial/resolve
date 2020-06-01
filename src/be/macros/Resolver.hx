@@ -424,22 +424,23 @@ class Resolver {
 
         }
 
-        var isAbstract = output.match(TAbstract(_, _));
+        var isAbstract = output.reduce().match(TAbstract(_, _));
         var outputComplex = output.toComplexType();
         var unified = (
             isAbstract && 
             (macro ($value:$outputComplex)).typeof().isSuccess()
             ) 
-            /*&& 
+            || 
             (
             input.unify(output) ||
             input.unify(output.follow()) ||
             input.follow().unify(output) ||
             input.follow().unify(output.follow())
-            )*/;
+            );
 
         if (Debug && CoerceVerbose) {
             trace( 'unified         :   ' + unified );
+            trace( 'is abstract     :   ' + isAbstract );
             trace( 'out ctype       :   ' + outputComplex.toString() );
         }
 
@@ -448,6 +449,7 @@ class Resolver {
 
         }
 
+        var error:Error = null;
         var outMatchesArray = (macro new Array()).typeof().sure().unify(output);
         var inMatchesArray = (macro new Array()).typeof().sure().unify(input);
 
@@ -468,7 +470,8 @@ class Resolver {
                             return Success( macro @:pos(pos) [$r] );
 
                         case Failure(e): 
-                            Context.fatalError( e.toString(), e.pos );
+                            //Context.fatalError( e.toString(), e.pos );
+                            error = e;
 
                     }
 
@@ -481,7 +484,7 @@ class Resolver {
         
         // Map an array. `array1.map( valueIn -> valueOut )`
         if (inMatchesArray && outMatchesArray) {
-            var result = null;
+            if (Debug && CoerceVerbose) trace( '---map arrays---' );
             var t1 = input;
             var t2 = output;
             // Get each arrays `<T>` type.
@@ -498,11 +501,9 @@ class Resolver {
             // Get the expr needed to convert from one type to another.
             // Use `macro v` as the expr, as the mapping happens after this, if successful.
             switch convertValue(t1, t2, macro v) {
-                case Success(r): result = r;
-                case Failure(e): Context.fatalError( e.toString(), e.pos );
+                case Success(r): return Success( macro @:pos(pos) $value.map(v->$r) );
+                case Failure(e): error = e;//Context.warning( e.toString(), e.pos );
             }
-
-            return Success( macro @:pos(pos) $value.map(v->$result) );
 
         }
 
@@ -517,7 +518,6 @@ class Resolver {
         }
 
         var tmp:Expr = null;
-        var error:Error = null;
 
         switch findMethod(signature, output, true, pos) {
             case Success(matches):

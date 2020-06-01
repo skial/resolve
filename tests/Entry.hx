@@ -14,6 +14,7 @@ class Entry {
             new coerce.StringFloat(),
             new coerce.ArrayStringInt(),
             new coerce.ArrayArray(),
+            new coerce.ArrayArrayOfAbstract(),
             new resolver.StringSpec(),
             new resolver.ReassignSpec(),
             new resolver.ClassSpec(),
