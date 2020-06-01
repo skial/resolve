@@ -57,7 +57,8 @@ class Resolver {
         //'Array' => new Map()
     ];
 
-    public static function determineTask(expr:Expr, input:Type, output:Type):ResolveTask {
+    public static function determineTask(expr:Expr, input:Type, output:Type, ?debug:Bool):ResolveTask {
+        if (debug == null) debug = Debug && CoerceVerbose;
         var result = null;
 
         // Yes this is a lazy hack but its for future me.
@@ -97,12 +98,12 @@ class Resolver {
                         if (i == 2) metaEReg = new EReg(metaString = r, o);
 
                     case x:
-                        if (Debug && CoerceVerbose) trace( x );
+                        if (debug) trace( x );
 
                 }
                 
             case x: 
-                if (Debug && CoerceVerbose) trace( x );
+                if (debug) trace( x );
 
         }
 
@@ -111,7 +112,7 @@ class Resolver {
             case _: false;
         }
         
-        if (Debug && CoerceVerbose) {
+        if (debug) {
             trace( 'expression      :   ' + expr.toString() );
             trace( 'input type      :   ' + input );
             trace( 'input reduced   :   ' + input.reduce() );
@@ -127,7 +128,7 @@ class Resolver {
             switch input.reduce() {
                 // var _:Resolve<$rawOutput, EReg, EReg> = Abstract;
                 case TAnonymous(_.get() => {status:AClassStatics((clsr = _.get() =>  {kind:KAbstractImpl(absr)})) }):
-                    if (Debug && CoerceVerbose) trace( 'static abstract    :   ' + absr.toString() );
+                    if (debug) trace( 'static abstract    :   ' + absr.toString() );
                     var ident = absr.toString().resolve();
                     var tasks = [
                         SearchMethod(rawOutput, TInst(clsr, []), true, ident, fieldEReg, metaEReg),
@@ -137,7 +138,7 @@ class Resolver {
                 
                 // var _:Resolve<$rawOutput, EReg, EReg> = Class;
                 case TAnonymous(_.get() => {status:AClassStatics(ref)}):
-                    if (Debug && CoerceVerbose) trace( 'static class    :   ' + ref.toString() );
+                    if (debug) trace( 'static class    :   ' + ref.toString() );
                     result = SearchMethod(rawOutput, TInst(ref, []), true, ref.toString().resolve(), fieldEReg, metaEReg);
 
                 /*
@@ -145,7 +146,7 @@ class Resolver {
                 var _:Resolve<$rawOutput, EReg, EReg> = instance;
                 */
                 case TInst(ref = _.get() => cls, params) if (cls.constructor != null && !cls.meta.has(Metas.CoreApi)):
-                    if (Debug && CoerceVerbose) trace( 'instance class    :   ' + cls.name );
+                    if (debug) trace( 'instance class    :   ' + cls.name );
                     result = SearchMethod(rawOutput, TInst(ref, params), false, expr, fieldEReg, metaEReg);
 
                 /*
@@ -153,7 +154,7 @@ class Resolver {
                 var _:Resolve<$rawOutput, EReg, EReg> = instance;
                 */
                 case TAbstract(absr = _.get() => abs, params):
-                    if (Debug && CoerceVerbose) trace( 'instance abstract   :   ' + absr.toString() );
+                    if (debug) trace( 'instance abstract   :   ' + absr.toString() );
                     var clsr = abs.impl != null ? abs.impl : null;
                     var tasks = [];
 
@@ -182,19 +183,20 @@ class Resolver {
 
         }
 
-        if (Debug && CoerceVerbose) {
+        if (debug) {
             trace( result );
         }
 
         return result;
     }
 
-    public static function findMethod(signature:Type, module:Type, statics:Bool, pos:Position, ?fieldEReg:EReg, ?metaEReg:EReg):Outcome<Array<{name:String, type:Type}>, Error> {
+    public static function findMethod(signature:Type, module:Type, statics:Bool, pos:Position, ?fieldEReg:EReg, ?metaEReg:EReg, ?debug:Bool):Outcome<Array<{name:String, type:Type}>, Error> {
+        if (debug == null) debug = Debug && CoerceVerbose;
         var results = [];
         var blankField = fieldEReg == null || '$fieldEReg'.startsWith('~//');
         var blankMeta = metaEReg == null || '$metaEReg'.startsWith('~//');
         
-        if (Debug && CoerceVerbose) {
+        if (debug) {
             trace( 'sig         :   ' + signature );
             trace( 'use statics :   ' + statics );
             trace( 'field ereg  :   ' + fieldEReg );
@@ -205,7 +207,7 @@ class Resolver {
             case TFun(args, ret):
                 var moduleID = module.getID();
 
-                if (Debug && CoerceVerbose) {
+                if (debug) {
                     trace( 'type        :   ' + moduleID );
                     trace( 'args        :   ' + args );
                     trace( 'return type :   ' + ret );
@@ -214,7 +216,7 @@ class Resolver {
                 var fields:Array<{name:String, type:Type, meta:Metadata}> = switch module {
                     // The class which is auto generated for abstracts.
                     case TInst(clsr = _.get() => cls = {kind:KAbstractImpl(absr)}, params):
-                        if (Debug && CoerceVerbose) trace( 'instance abstract' );
+                        if (debug) trace( 'instance abstract' );
                         var fs = [];
                         // Afaik, all abstract methods get converted to statics?
                         var sfields = cls.statics.get();
@@ -251,7 +253,7 @@ class Resolver {
                                         } );
 
                                     case x:
-                                        if (Debug && CoerceVerbose) trace( x );
+                                        if (debug) trace( x );
 
                                 }
 
@@ -268,12 +270,12 @@ class Resolver {
                         fs;
 
                     case TInst(_.get() => cls, params):
-                        if (Debug && CoerceVerbose) trace( 'class' );
+                        if (debug) trace( 'class' );
                         var fs = statics ? cls.statics.get() : cls.fields.get();
                         fs.map( f -> {name:f.name, type:f.type, meta:f.meta.get()} );
 
                     case TAbstract(_.get() => abs, params) if (metaEReg != null):
-                        if (Debug && CoerceVerbose) trace( 'abstract' );
+                        if (debug) trace( 'abstract' );
                         var fs = [];
 
                         if (statics) {
@@ -335,7 +337,7 @@ class Resolver {
                         fs;
 
                     case x:
-                        if (Debug && CoerceVerbose) {
+                        if (debug) {
                             trace(x);
                         }
 
@@ -345,7 +347,7 @@ class Resolver {
 
                 fields = fields.filter( f -> f.name != '' );
 
-                if (Debug && CoerceVerbose) {
+                if (debug) {
                     trace( 'checking    :   ' + fields.map( f->f.name ) );
                 }
 
@@ -369,26 +371,26 @@ class Resolver {
                         var printer = new haxe.macro.Printer();
                         for (meta in f1.meta) {
                             var str = printer.printMetadata(meta);
-                            if (Debug && CoerceVerbose) trace(str);
+                            if (debug) trace(str);
                             if (metaEReg.match( str )) f1total++;
                         }
 
                         for (meta in f2.meta) {
                             var str = printer.printMetadata(meta);
-                            if (Debug && CoerceVerbose) trace(str);
+                            if (debug) trace(str);
                             if (metaEReg.match( str )) f2total++;
                         }
 
                     }
 
-                    if (Debug && CoerceVerbose) {
+                    if (debug) {
                         trace( f1.name, f2.name, f1total, f2total, f1total - f2total );
                     }
 
                     return f1total - f2total;
                 } );
 
-                if (Debug && CoerceVerbose) {
+                if (debug) {
                     trace( 'sorted      :   ' + fields.map( f->f.name ) );
                 }
 
@@ -402,12 +404,13 @@ class Resolver {
         return Success(results);
     }
 
-    public static function convertValue(input:Type, output:Type, value:Expr):Outcome<Expr, Error> {
+    public static function convertValue(input:Type, output:Type, value:Expr, ?debug:Bool):Outcome<Expr, Error> {
+        if (debug == null) debug = Debug && CoerceVerbose;
         var inputID = input.getID();
         var outputID = output.getID();
         var pos = value.pos;
 
-        if (Debug && CoerceVerbose) {
+        if (debug) {
             trace( 'input       :   ' + input );
             trace( 'output      :   ' + output );
             trace( 'value       :   ' + value.toString() );
@@ -438,7 +441,7 @@ class Resolver {
             input.follow().unify(output.follow())
             );
 
-        if (Debug && CoerceVerbose) {
+        if (debug) {
             trace( 'unified         :   ' + unified );
             trace( 'is abstract     :   ' + isAbstract );
             trace( 'out ctype       :   ' + outputComplex.toString() );
@@ -453,7 +456,7 @@ class Resolver {
         var outMatchesArray = (macro new Array()).typeof().sure().unify(output);
         var inMatchesArray = (macro new Array()).typeof().sure().unify(input);
 
-        if (Debug && CoerceVerbose) {
+        if (debug) {
             trace( 'IN unify []     :   ' + inMatchesArray );
             trace( 'OUT unify []    :   ' + outMatchesArray );
         }
@@ -463,7 +466,7 @@ class Resolver {
             // Switch into the Array `<T>` type and fetch its parameter.
             switch output {
                 case TInst(_, [t1]):
-                    if (Debug && CoerceVerbose) trace( '[] `<T>`    :   ' + t1 );
+                    if (debug) trace( '[] `<T>`    :   ' + t1 );
 
                     switch convertValue(input, t1.follow(), value) {
                         case Success(r): 
@@ -476,7 +479,7 @@ class Resolver {
                     }
 
                 case x:
-                    if (Debug && CoerceVerbose) trace( x );
+                    if (debug) trace( x );
 
             }
 
@@ -484,18 +487,18 @@ class Resolver {
         
         // Map an array. `array1.map( valueIn -> valueOut )`
         if (inMatchesArray && outMatchesArray) {
-            if (Debug && CoerceVerbose) trace( '---map arrays---' );
+            if (debug) trace( '---map arrays---' );
             var t1 = input;
             var t2 = output;
             // Get each arrays `<T>` type.
             switch input {
                 case TInst(_, [t]): t1 = t.follow();
-                case x: if (Debug && CoerceVerbose) trace( x );
+                case x: if (debug) trace( x );
             }
 
             switch output {
                 case TInst(_, [t]): t2 = t.follow();
-                case x: if (Debug && CoerceVerbose) trace( x );
+                case x: if (debug) trace( x );
             }
 
             // Get the expr needed to convert from one type to another.
@@ -511,7 +514,7 @@ class Resolver {
         var inputComplex = input.toComplexType();
         var signature = (macro:$inputComplex->$outputComplex).toType().sure();
 
-        if (Debug && CoerceVerbose) {
+        if (debug) {
             trace( 'input ctype     :   ' + inputComplex.toString() );
             trace( 'output ctype    :   ' + outputComplex.toString() );
             trace( 'sig             :   ' + signature );
@@ -551,7 +554,8 @@ class Resolver {
         return Success( tmp == null ? value : macro @:pos(pos) $tmp($value) );
     }
 
-    public static function handleTask(task:ResolveTask):Expr {
+    public static function handleTask(task:ResolveTask, ?debug:Bool):Expr {
+        if (debug == null) debug = Debug && CoerceVerbose;
         var result:Expr = null;
         var pos = Context.currentPos();
 
@@ -565,11 +569,11 @@ class Resolver {
                         Context.fatalError( NoNesting, pos );
 
                     case SearchMethod(signature, module, statics, e, fieldEReg, metaEReg):
-                        if (Debug && CoerceVerbose) trace( 'multi task  :   search methods' );
+                        if (debug) trace( 'multi task  :   search methods' );
                         switch Resolver.findMethod(signature, module, statics, e.pos, fieldEReg, metaEReg) {
                             case Success(matches):
                                 if (matches.length == 0) continue;
-                                if (Debug && CoerceVerbose) trace( 'matches     :   ' + matches.map( m -> m.name ) );
+                                if (debug) trace( 'matches     :   ' + matches.map( m -> m.name ) );
                                 for (match in matches) {
                                     var idx = names.indexOf(match.name);
 
@@ -599,7 +603,7 @@ class Resolver {
                 var matches = [for (_ => obj in methods) obj];
                 haxe.ds.ArraySort.sort(matches, (a, b) -> a.hits.length - b.hits.length );
 
-                if (Debug && CoerceVerbose) trace( 'matches     :   ' + matches.map( m -> m.name + ':' + m.hits.length) );
+                if (debug) trace( 'matches     :   ' + matches.map( m -> m.name + ':' + m.hits.length) );
 
                 if (matches.length == 1) {
                     var field = matches[0];
@@ -610,7 +614,7 @@ class Resolver {
                         var field = matches.pop();
                         var last = field.hits[field.hits.length - 1];
 
-                        if (Debug && CoerceVerbose) {
+                        if (debug) {
                             trace( '--checking...--' );
                             trace( 'field name      :   ' + field.name );
                             trace( 'normal type     :   ' + field.type );
@@ -619,7 +623,7 @@ class Resolver {
                         }
 
                         if (field.type.follow().unify(last.sig)) {
-                            if (Debug && CoerceVerbose) {
+                            if (debug) {
                                 trace( '<--unified-->' );
                                 trace( 'field name  :   ' + field.name );
                             }
@@ -635,7 +639,7 @@ class Resolver {
 
                 }
 
-                if (Debug && CoerceVerbose) trace( 'multi result:   ' + result.toString() );
+                if (debug) trace( 'multi result:   ' + result.toString() );
 
             case ConvertValue(input, output, value): 
                 switch Resolver.convertValue(input, output, value) {
@@ -657,7 +661,7 @@ class Resolver {
                             while (matches.length > 0) {
                                 var field = matches.pop();
 
-                                if (Debug && CoerceVerbose) {
+                                if (debug) {
                                     trace( '--checking...--' );
                                     trace( 'field name      :   ' + field.name );
                                     trace( 'normal type     :   ' + field.type );
@@ -670,7 +674,7 @@ class Resolver {
                                     break;
 
                                 } else {
-                                    if (Debug && CoerceVerbose) {
+                                    if (debug) {
                                         trace( 'Field `' + field.name + '` type ' + field.type + ' failed to match against ' + signature );
                                     }
 
