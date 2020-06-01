@@ -206,9 +206,9 @@ class Resolver {
                 var moduleID = module.getID();
 
                 if (Debug && CoerceVerbose) {
-                    trace( moduleID );
-                    trace( 'args: ' + args );
-                    trace( 'return type: ' + ret );
+                    trace( 'type        :   ' + moduleID );
+                    trace( 'args        :   ' + args );
+                    trace( 'return type :   ' + ret );
                 }
 
                 var fields:Array<{name:String, type:Type, meta:Metadata}> = switch module {
@@ -272,7 +272,7 @@ class Resolver {
                         var fs = statics ? cls.statics.get() : cls.fields.get();
                         fs.map( f -> {name:f.name, type:f.type, meta:f.meta.get()} );
 
-                    case TAbstract(_.get() => abs, params):
+                    case TAbstract(_.get() => abs, params) if (metaEReg != null):
                         if (Debug && CoerceVerbose) trace( 'abstract' );
                         var fs = [];
 
@@ -403,10 +403,9 @@ class Resolver {
     }
 
     public static function convertValue(input:Type, output:Type, value:Expr):Outcome<Expr, Error> {
-        var result = null;
         var inputID = input.getID();
         var outputID = output.getID();
-        var position = value.pos;
+        var pos = value.pos;
 
         if (Debug && CoerceVerbose) {
             trace( 'input       :   ' + input );
@@ -419,123 +418,137 @@ class Resolver {
         if (typeMap.exists( inputID )) {
             var sub = typeMap.get( inputID );
             if (sub.exists( outputID )) {
-                result = macro @:pos(value.pos) $e{sub.get( outputID )}($value);
+                return Success( macro @:pos(pos) $e{sub.get( outputID )}($value) );
 
             }
 
         }
 
-        if (result == null) {
-            var outputComplex = output.toComplexType();
-            var outMatchesArray = (macro new Array()).typeof().sure().unify(output);
-            var inMatchesArray = (macro new Array()).typeof().sure().unify(input);
-            var unified = input.unify(output);
+        var isAbstract = output.match(TAbstract(_, _));
+        var outputComplex = output.toComplexType();
+        var unified = (
+            isAbstract && 
+            (macro ($value:$outputComplex)).typeof().isSuccess()
+            ) 
+            /*&& 
+            (
+            input.unify(output) ||
+            input.unify(output.follow()) ||
+            input.follow().unify(output) ||
+            input.follow().unify(output.follow())
+            )*/;
 
-            if (Debug && CoerceVerbose) {
-                trace( 'IN unify []     :   ' + inMatchesArray );
-                trace( 'OUT unify []    :   ' + outMatchesArray );
-                trace( 'unified         :   ' + unified );
-                trace( 'out ctype       :   ' + outputComplex.toString() );
-            }
+        if (Debug && CoerceVerbose) {
+            trace( 'unified         :   ' + unified );
+            trace( 'out ctype       :   ' + outputComplex.toString() );
+        }
 
-            if (unified) {
-                result = macro @:pos(position) ($value:$outputComplex);
+        if (unified) {
+            return Success( macro @:pos(pos) ($value:$outputComplex) );
 
-            } else if (outMatchesArray && !inMatchesArray) {
-                // Switch into the Array `<T>` type and fetch its parameter.
-                switch output {
-                    case TInst(_, [t1]):
-                        if (Debug && CoerceVerbose) trace( '[] `<T>`    :   ' + t1 );
+        }
 
-                        switch convertValue(input, t1.follow(), value) {
-                            case Success(r): 
-                                result = macro @:pos(position) [$r];
+        var outMatchesArray = (macro new Array()).typeof().sure().unify(output);
+        var inMatchesArray = (macro new Array()).typeof().sure().unify(input);
 
-                            case Failure(e): 
-                                Context.fatalError( e.toString(), position );
-
-                        }
-
-                    case x:
-                        if (Debug && CoerceVerbose) trace( x );
-
-                }
-
-            } else if (inMatchesArray && outMatchesArray) {
-                var t1 = input;
-                var t2 = output;
-                // Get each arrays `<T>` type.
-                switch input {
-                    case TInst(_, [t]): t1 = t.follow();
-                    case x: if (Debug && CoerceVerbose) trace( x );
-                }
-
-                switch output {
-                    case TInst(_, [t]): t2 = t.follow();
-                    case x: if (Debug && CoerceVerbose) trace( x );
-                }
-
-                // Get the expr needed to convert from one type to another.
-                // Use `macro v` as the expr, as the mapping happens after this, if successful.
-                switch convertValue(t1, t2, macro v) {
-                    case Success(r): result = r;
-                    case Failure(e): Context.fatalError( e.toString(), position );
-                }
-
-                result = macro @:pos(position) $value.map(v->$result);
-
-            }
+        if (Debug && CoerceVerbose) {
+            trace( 'IN unify []     :   ' + inMatchesArray );
+            trace( 'OUT unify []    :   ' + outMatchesArray );
         }
         
-        if (result == null) {
-            var inputComplex = input.toComplexType();
-            var outputComplex = output.toComplexType();
-            var signature = (macro:$inputComplex->$outputComplex).toType().sure();
+        // Ouput expects an array, so just wrap the value. `[value]`
+        if (outMatchesArray && !inMatchesArray) {
+            // Switch into the Array `<T>` type and fetch its parameter.
+            switch output {
+                case TInst(_, [t1]):
+                    if (Debug && CoerceVerbose) trace( '[] `<T>`    :   ' + t1 );
 
-            if (Debug && CoerceVerbose) {
-                trace( inputComplex.toString() );
-                trace( outputComplex.toString() );
-                trace( signature );
-            }
+                    switch convertValue(input, t1.follow(), value) {
+                        case Success(r): 
+                            return Success( macro @:pos(pos) [$r] );
 
-            var tmp:Expr = null;
-            var error:Error = null;
-
-            switch findMethod(signature, output, true, position) {
-                case Success(matches):
-                    if (matches.length == 1) {
-                        tmp = outputID.resolve().field( matches[0].name );
-
-                    } else if (matches.length > 1) {
-                        while (matches.length > 1) {
-                            var field = matches.pop();
-
-                            if (field.type.unify(signature)) {
-                                tmp = outputID.resolve().field( field.name );
-                                break;
-
-                            }
-
-                        }
-
-                    } else {
-                        error = new Error( NotFound, NoMatches, value.pos );
+                        case Failure(e): 
+                            Context.fatalError( e.toString(), e.pos );
 
                     }
 
-                case Failure(err):
-                    error = err;
+                case x:
+                    if (Debug && CoerceVerbose) trace( x );
 
-            };
+            }
 
-            if (error != null) return Failure(new Error( error.code, error.message, error.pos ));
-            
-            result = tmp == null ? value : macro @:pos(value.pos) $tmp($value);
+        } 
+        
+        // Map an array. `array1.map( valueIn -> valueOut )`
+        if (inMatchesArray && outMatchesArray) {
+            var result = null;
+            var t1 = input;
+            var t2 = output;
+            // Get each arrays `<T>` type.
+            switch input {
+                case TInst(_, [t]): t1 = t.follow();
+                case x: if (Debug && CoerceVerbose) trace( x );
+            }
+
+            switch output {
+                case TInst(_, [t]): t2 = t.follow();
+                case x: if (Debug && CoerceVerbose) trace( x );
+            }
+
+            // Get the expr needed to convert from one type to another.
+            // Use `macro v` as the expr, as the mapping happens after this, if successful.
+            switch convertValue(t1, t2, macro v) {
+                case Success(r): result = r;
+                case Failure(e): Context.fatalError( e.toString(), e.pos );
+            }
+
+            return Success( macro @:pos(pos) $value.map(v->$result) );
+
         }
 
-        if (result == null) return Failure(new Error( NotFound, TotalFailure, value.pos ));
+        // Fallback to looking up a function.
+        var inputComplex = input.toComplexType();
+        var signature = (macro:$inputComplex->$outputComplex).toType().sure();
+
+        if (Debug && CoerceVerbose) {
+            trace( 'input ctype     :   ' + inputComplex.toString() );
+            trace( 'output ctype    :   ' + outputComplex.toString() );
+            trace( 'sig             :   ' + signature );
+        }
+
+        var tmp:Expr = null;
+        var error:Error = null;
+
+        switch findMethod(signature, output, true, pos) {
+            case Success(matches):
+                if (matches.length == 1) {
+                    tmp = outputID.resolve().field( matches[0].name );
+
+                } else if (matches.length > 1) {
+                    while (matches.length > 1) {
+                        var field = matches.pop();
+
+                        if (field.type.unify(signature)) {
+                            tmp = outputID.resolve().field( field.name );
+                            break;
+
+                        }
+
+                    }
+
+                } else {
+                    error = new Error( NotFound, NoMatches, pos );
+
+                }
+
+            case Failure(err):
+                error = err;
+
+        };
+
+        if (error != null) return Failure(error);
         
-        return Success(result);
+        return Success( tmp == null ? value : macro @:pos(pos) $tmp($value) );
     }
 
     public static function handleTask(task:ResolveTask):Expr {
