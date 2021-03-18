@@ -216,7 +216,9 @@ class Resolver {
                 var fields:Array<{name:String, type:Type, meta:Metadata}> = switch module {
                     // The class which is auto generated for abstracts.
                     case TInst(clsr = _.get() => cls = {kind:KAbstractImpl(absr)}, params):
-                        if (debug) trace( 'instance abstract' );
+                        if (debug) {
+                            trace( "instance abstract `new T`" );
+                        }
                         var fs = [];
                         // Afaik, all abstract methods get converted to statics?
                         var sfields = cls.statics.get();
@@ -241,7 +243,14 @@ class Resolver {
                                 static function foo(this:Int, str:String):String;
                                 ```
                             */
-                            var impls = sfields.filter( f -> f.meta.has(Metas.Impl) );
+                            if (debug) {
+                                var printer = new haxe.macro.Printer();
+                                trace( sfields.map( f->f.name + ':' + f.meta.get().map(m->printer.printMetadata(m))) );
+                            }
+                            var impls = sfields;//.filter( f -> f.meta.has(Metas.Impl) );
+                            if (debug) {
+                                trace('Found @:impl:   ' + impls.map(f->f.name));
+                            }
                             // As `Resolve` relies on exact types, pop the first argument off.
                             for (field in impls) {
                                 switch field.type.follow() {
@@ -275,7 +284,11 @@ class Resolver {
                         fs.map( f -> {name:f.name, type:f.type, meta:f.meta.get()} );
 
                     case TAbstract(_.get() => abs, params) if (metaEReg != null):
-                        if (debug) trace( 'abstract' );
+                        if (debug) {
+                            trace( 'abstract `:T`' );
+                            trace( 'check statics:  $statics' );
+                        }
+
                         var fs = [];
 
                         if (statics) {
@@ -327,7 +340,7 @@ class Resolver {
                             }
 
                         } else {
-                            // Check @:to implicit cats
+                            // Check @:to implicit casts
                             if (metaEReg.match('@' + Metas.To)) for (f in abs.to) {
                                 fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
                             }
