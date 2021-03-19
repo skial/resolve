@@ -4,7 +4,7 @@ An `abstract` type to help filter and select functions based on method signature
 
 ### Why tho?
 
-Coerce is useful for when dealing with user provided types during macro generation. _If using coerce in macros, its recommended to use the `be.macros.Resolver` methods directly._
+Coerce is more useful for when dealing with user provided types during macro generation. _If using coerce in macros, its recommended to use the `be.macros.Resolver` methods directly._
 
 ### Type Support
 
@@ -23,13 +23,28 @@ Classes and Abstracts are supported, currently. There are two ways of searching,
     var r:Resolve<Int->Int, ~//, ~//> = i;
     ```
 
+##### Filtering against names
+
+- ```haxe
+  var r:Resolve<Int->Int, ~/add(ition|able)?/, ~//> = /*Search against instance or static expression*/.
+  ```
+
+##### Filtering against metadata
+
+> A fields metadata object is stringified using `haxe.macro.Printer` so it can be checked with the provided `EReg`.
+- ```haxe
+  var r:Resolve<Int->Int, ~//, ~/@:op([\w\d\s]+\+[\w\d\s]+)/> = /*Search against instance or static expression*/.
+  ```
+
 ##### Abstract Support
+
+> Abstracts are compile time only types, with many features which can result in complex usage. Pairing them with macros make this more difficult. 🐲 
 
 To access Abstract features like `@:to`, `@:from`, `@:op(_)` etc, the meta filter needs to match the respective metadata for that feature. 
 
-Some of these features are `static` implementations. An Abstract instance passed to a `Resolve` with a matching meta `EReg` will be changed to the static representation and in doing so dropping the instance reference.
+Some of these features are `static` implementations. An Abstract *instance* passed to a `Resolve` type with a matching meta `EReg` will be changed to the *static* representation and in doing so, dropping the instance reference.
 
-### Types
+### Types API
 
 #### `Resolve`
 
@@ -72,13 +87,21 @@ class Fake {
 
 ##### `Resolve.resolve`
 
+> Using `resolve(<expr>)` can help prevent auto-completion issues.
+
 ```haxe
 import be.types.Resolve;
+import be.types.Resolve.resolve;
 
 class Main {
     public static function main() {
         var input = '999';
+        var r:Resolve<String->Int, ~/int/i, ~//i> = resolve(Std);
+        // `r` is already resolved, so gets passed `Std.parseInt`.
+        trace( asInt(r, input) );       // trace(999);
+        // Resolves to `Std.parseInt`.
         trace( asInt(Std, input) );     // trace(999);
+        // Resolves to `Fake.parseInt`.
         trace( asInt(Fake, input) );    // trace(1000);
         // Functions that unify pass right through.
         trace( asInt(_ -> 1, '125') );  // trace(1);
@@ -96,23 +119,25 @@ public class Fake {
 
 #### `Pick`
 
-`Pick` is a `@:genericBuild` macro which creates a `Resolve` making it a more friendly type to work with. 
+`Pick` is a `@:genericBuild` macro which creates a `Resolve` type, making it a more friendly type to work with. 
 - `Pick` only requires the type signature.
-- How does `Pick` resolve if a regular expression passed in is a metadata filter or not?
+- How does `Pick` decide if a regular expression passed in is a metadata filter or not?
     + It checks for the existence of the `@` character, which isn't a valid ident character in Haxelang.
 
 ```haxe
 import be.types.Pick;
+import be.types.Resolve.resolve;
 
 class Main {
     public static function main() {
         var input = '999';
-        trace( asInt(Std, input) );     // trace(999);
-        trace( asInt(Fake, input) );    // trace(1000);
+        trace( asInt(Std, input) );             // trace(999);
+        trace( asInt(resolve(Fake), input) );   // trace(1000);
         // Functions that unify pass right through.
         trace( asInt(_ -> 1, '125') );  // trace(1);
     }
 
+    // `Pick<String-Int>` returns the `Resolve<String->Int, ~//, ~//>` type.
     static function asInt(r:Pick<String->Int>, v:String):Int return r(v);
 }
 
@@ -122,6 +147,19 @@ public class Fake {
 }
 ```
 
+### `be.macros.Resolver`
+
+Take a look at the source for `be.coerce.Resolve` for getting started.
+
+```haxe
+class Resolver {
+    public static function determineTask(expr:Expr, input:Type, output:Type, ?debug:Bool):ResolveTask;
+    public static function findMethod(signature:Type, module:Type, statics:Bool, pos:Position, ?fieldEReg:EReg, ?metaEReg:EReg, ?debug:Bool):Outcome<Array<{name:String, type:Type}>, Error>;
+    public static function convertValue(input:Type, output:Type, value:Expr, ?debug:Bool):Outcome<Expr, Error>;
+    public static function handleTask(task:ResolveTask, ?debug:Bool):Expr;
+}
+```
+
 ### Defines
 
-- `-D coerce-verbose` - Paired with `-debug` will have the build macros print a lot of trace statements.
+- `-D coerce-verbose` - Paired with `-debug` will have the build macros print **a lot** of trace statements.
