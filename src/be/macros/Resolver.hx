@@ -94,6 +94,9 @@ class Resolver {
                 // Extract the EReg constants.
                 for (i in 1...3) if (params[i] != null) switch params[i] {
                     case TInst(_.get() => {kind:KExpr(_.expr => EConst(CRegexp(r, o)))}, _):
+                        if (debug) {
+                            trace( i, r, o );
+                        }
                         if (i == 1) fieldEReg = new EReg(fieldString = r, o);
                         if (i == 2) metaEReg = new EReg(metaString = r, o);
 
@@ -154,8 +157,8 @@ class Resolver {
                 var _:Resolve<$rawOutput, EReg, EReg> = instance;
                 */
                 case TAbstract(absr = _.get() => abs, params):
-                    if (debug) trace( 'instance abstract   :   ' + absr.toString() );
-                    var clsr = abs.impl != null ? abs.impl : null;
+                    if (debug) trace( 'Instance Abstract   :   ' + absr.toString() );
+                    var clsr = abs.impl;
                     var tasks = [];
 
                     if (clsr != null) {
@@ -165,6 +168,7 @@ class Resolver {
                     }
 
                     if (metaString != '') {
+                        if (debug) trace( 'Checking Abstract instance & static fields');
                         // It has a metadata ereg, so set the abstract to be checked.
                         tasks.push( SearchMethod(rawOutput, TAbstract(absr, params), true, absr.toString().resolve(), fieldEReg, metaEReg) );
                         tasks.push( SearchMethod(rawOutput, TAbstract(absr, params), false, expr, fieldEReg, metaEReg) );
@@ -225,7 +229,7 @@ class Resolver {
                     // The class which is auto generated for abstracts.
                     case TInst(clsr = _.get() => cls = {kind:KAbstractImpl(absr)}, params):
                         if (debug) {
-                            trace( "instance abstract `new T`" );
+                            trace( "Instance abstract `new T`" );
                         }
                         var fs = [];
                         // Afaik, all abstract methods get converted to statics?
@@ -290,14 +294,14 @@ class Resolver {
                         fs;
 
                     case TInst(_.get() => cls, params):
-                        if (debug) trace( 'class' );
+                        if (debug) trace( 'Class' );
                         var fs = statics ? cls.statics.get() : cls.fields.get();
                         fs.map( f -> {name:f.name, type:f.type, meta:f.meta.get()} );
 
                     case TAbstract(_.get() => abs, params) if (metaEReg != null):
                         if (debug) {
-                            trace( 'abstract `:T`' );
-                            trace( 'check statics:  $statics' );
+                            trace( 'Abstract `:T`' );
+                            trace( 'Check statics:  $statics' );
                         }
 
                         var fs = [];
@@ -317,11 +321,21 @@ class Resolver {
                             // Push binop assigns operators. Eg. `+=` or `*=`.
                             for (i in 0...12) binop.push( binop[i] + '=' );
                             
-                            for (b in binop) if (metaEReg.match(op + '(A $b B)')) {
-                                for (f in abs.binops) if (f.field != null) {
-                                    fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
+                            trace( metaEReg );
+                            for (b in binop) {
+                                trace( op + '(A $b B)' );
+
+                                if (metaEReg.match(op + '(A $b B)')) {
+                                    if (debug) {
+                                        trace( metaEReg );
+                                        trace( 'Matched binop:  $b' );
+                                    }
+                                    for (f in abs.binops) if (f.field != null) {
+                                        fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
+                                    }
+                                    break;
                                 }
-                                break;
+
                             }
     
                             var unop = ['++', '--', '!', '-', '~'];

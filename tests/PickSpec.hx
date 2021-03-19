@@ -66,10 +66,16 @@ class PickSpec {
         return asserts.done();
     }
 
-    // Idk if this fits...
+    /**
+        TODO - further work...
+        This should work, as `a + 10` would result in `Qux.addInt(a, 10)` by
+        the compiler.
+        ---
+        Currently Resolver will only check abstract meta features on statics searchs, eg `Resolve<Type> = Qux`.
+    **/
     /*public function testPick_abstractInstance() {
         var a:Qux = 10;
-        var p:Pick<Int->Int->Int, ~/@:op\([a-z ]+\+[a-z ]+\)/i> = a;
+        var p:Pick<Int->Int, ~/@:op\([a-z ]+\+[a-z ]+\)/i> = a;
 
         asserts.assert( p(a, 10) == 20 );
 
