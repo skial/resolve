@@ -59,7 +59,7 @@ class Resolver {
 
     public static function determineTask(expr:Expr, input:Type, output:Type, ?debug:Bool):ResolveTask {
         if (debug == null) debug = Debug && CoerceVerbose;
-        var result = null;
+        var result:ResolveTask = null;
 
         // Yes this is a lazy hack but its for future me.
         if ('$output'.indexOf('TAbstract(be.types.Pick') > -1) {
@@ -184,7 +184,15 @@ class Resolver {
         }
 
         if (debug) {
-            trace( result );
+            switch result {
+                case Multiple(tasks):
+                    trace('<Multiple>');
+                    for (task in tasks) trace( task );
+
+                case _:
+                    trace(result);
+
+            }
         }
 
         return result;
@@ -252,6 +260,9 @@ class Resolver {
                                 trace('Found @:impl:   ' + impls.map(f->f.name));
                             }
                             // As `Resolve` relies on exact types, pop the first argument off.
+                            // TODO - see if its possible to use a closure, binding the first arg so the signature is shortened but still works
+                            // with abstract `@:op(a + b)` statics but in an instanced usage, `a + 10` which gets compiled to static call `T.add(a, 10)`.
+                            // Closure would be `b -> a + b`;
                             for (field in impls) {
                                 switch field.type.follow() {
                                     case TFun(args, ret) if (args.length > 1 && args[0].t.unify(raw)):
@@ -303,7 +314,7 @@ class Resolver {
                             // Check all Binops
                             var op = '@' + Metas.Op;
                             var binop = ['+', '-', '/', '*', '<<', '>>', '>>>', '|', '&', '^', '%', '=', '!=', '>', '>=', '<', '<=', '&&', '||', '...', '=>', 'in'];
-                            // push binop assigns operators.
+                            // Push binop assigns operators. Eg. `+=` or `*=`.
                             for (i in 0...12) binop.push( binop[i] + '=' );
                             
                             for (b in binop) if (metaEReg.match(op + '(A $b B)')) {
@@ -642,6 +653,12 @@ class Resolver {
                             }
                             result = last.expr.field( field.name );
                             break;
+
+                        } else {
+                            if (debug) {
+                                trace('<--mismatch-->');
+                                trace( 'field name  :   ' + field.name );
+                            }
 
                         }
 
