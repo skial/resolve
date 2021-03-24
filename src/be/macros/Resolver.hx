@@ -12,6 +12,7 @@ using StringTools;
 using haxe.macro.Context;
 using tink.CoreApi;
 using tink.MacroApi;
+using haxe.macro.TypeTools;
 
 enum abstract LocalDefines(Defines) {
     public var CoerceVerbose = 'coerce_verbose';
@@ -27,6 +28,8 @@ enum abstract LocalDefines(Defines) {
 }
 
 class Resolver {
+
+    private static final printer = new haxe.macro.Printer();
 
     @:persistent public static var stringMap = [
         'Int' => macro Std.parseInt,
@@ -162,6 +165,7 @@ class Resolver {
                     var tasks = [];
 
                     if (clsr != null) {
+                        if (debug) trace( 'Checking the implemenation class for instance fields.' );
                         // Check the implementation class for instance fields first.
                         tasks.push( SearchMethod(rawOutput, TInst(clsr, []), false, expr, fieldEReg, metaEReg) );
 
@@ -267,17 +271,29 @@ class Resolver {
                             // TODO - see if its possible to use a closure, binding the first arg so the signature is shortened but still works
                             // with abstract `@:op(a + b)` statics but in an instanced usage, `a + 10` which gets compiled to static call `T.add(a, 10)`.
                             // Closure would be `b -> a + b`;
+                            if (debug) trace( raw );
                             for (field in impls) {
                                 switch field.type.follow() {
-                                    case TFun(args, ret) if (args.length > 1 && args[0].t.unify(raw)):
-                                        fs.push( {
-                                            name: field.name,
-                                            type: TFun(args.slice(1), ret),
-                                            meta: field.meta.get(),
-                                        } );
+                                    case x = TFun(args, ret):
+                                        if (debug) {
+                                            trace( args.length, args );
+                                            trace( args[0].t, args[0].t.followWithAbstracts(), args[0].t.followWithAbstracts().unify(raw) );
+
+                                        }
+                                        if (args.length > 1 && args[0].t.followWithAbstracts().unify(raw)) {
+                                            fs.push( {
+                                                name: field.name,
+                                                type: TFun(args.slice(1), ret),
+                                                meta: field.meta.get(),
+                                            } );
+
+                                        } else {
+                                            if (debug) trace( field.name, x );
+
+                                        }
 
                                     case x:
-                                        if (debug) trace( x );
+                                        if (debug) trace( field.name, x );
 
                                 }
 
@@ -321,7 +337,7 @@ class Resolver {
                             // Push binop assigns operators. Eg. `+=` or `*=`.
                             for (i in 0...12) binop.push( binop[i] + '=' );
                             
-                            trace( metaEReg );
+                            if (debug) trace( metaEReg );
                             for (b in binop) {
                                 trace( op + '(A $b B)' );
 
@@ -331,6 +347,7 @@ class Resolver {
                                         trace( 'Matched binop:  $b' );
                                     }
                                     for (f in abs.binops) if (f.field != null) {
+                                        if (debug) trace( 'Adding @:op overload `$b` method ${f.field.name}' );
                                         fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
                                     }
                                     break;
@@ -396,6 +413,34 @@ class Resolver {
                     var f1total = 0;
                     var f2total = 0;
 
+                    /**
+                        Check the equality of types signatures, which is preferred above unifying types.
+                    **/
+                    switch ([signature, f1.type, f2.type]) {
+                        case [TFun(args, ret), TFun(args1, ret1), TFun(args2, ret2)]:
+                            var idents = args.map( a -> a.t.toString() );
+                            var retIdent = ret.toString();
+                            if (args.length == args1.length && retIdent == ret1.toString()) {
+                                for (i in 0...args1.length) if (idents[i] == args1[i].t.toString()) {
+                                    f1total++;
+                                }
+
+                            }
+
+                            if (args.length == args2.length && retIdent == ret2.toString()) {
+                                for (i in 0...args2.length) if (idents[i] == args2[i].t.toString()) {
+                                    f2total++;
+                                }
+                                
+                            }
+
+                            if (f1.type.unify(signature)) f1total++;
+                            if (f2.type.unify(signature)) f2total++;
+
+                        case _:
+
+                    }
+
                     if (!fieldMatch) {
                         switch [fieldEReg.match(f1.name), fieldEReg.match(f2.name)] {
                             case [true, false]: f1total++;
@@ -406,7 +451,6 @@ class Resolver {
                     }
 
                     if (!metaMatch) {
-                        var printer = new haxe.macro.Printer();
                         for (meta in f1.meta) {
                             var str = printer.printMetadata(meta);
                             if (debug) trace(str);
