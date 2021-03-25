@@ -206,7 +206,7 @@ class Resolver {
         return result;
     }
 
-    public static function findMethod(signature:Type, module:Type, statics:Bool, pos:Position, ?fieldEReg:EReg, ?metaEReg:EReg, ?debug:Bool):Outcome<Array<{name:String, type:Type}>, Error> {
+    public static function findMethod(signature:Type, module:Type, statics:Bool, pos:Position, ?fieldEReg:EReg, ?metaEReg:EReg, ?debug:Bool):Outcome<Array<{name:String, type:Type, meta:Metadata}>, Error> {
         if (debug == null) debug = Debug && CoerceVerbose;
         var results = [];
         var blankField = fieldEReg == null || '$fieldEReg'.startsWith('~//');
@@ -281,6 +281,7 @@ class Resolver {
 
                                         }
                                         if (args.length > 1 && args[0].t.followWithAbstracts().unify(raw)) {
+                                            field.meta.add( ':resolver.self.bind', [macro $v{args.length-1}], field.pos );
                                             fs.push( {
                                                 name: field.name,
                                                 type: TFun(args.slice(1), ret),
@@ -339,8 +340,6 @@ class Resolver {
                             
                             if (debug) trace( metaEReg );
                             for (b in binop) {
-                                trace( op + '(A $b B)' );
-
                                 if (metaEReg.match(op + '(A $b B)')) {
                                     if (debug) {
                                         trace( metaEReg );
@@ -644,7 +643,7 @@ class Resolver {
         switch task {
             case Multiple(tasks):
                 var names:Array<String> = [];
-                var methods:Array<{name:String, type:Type, hits:Array<{sig:Type, expr:Expr}>}> = [];
+                var methods:Array<{name:String, type:Type, meta:Metadata, hits:Array<{sig:Type, expr:Expr}>}> = [];
                 
                 for (task in tasks) switch task {
                     case Multiple(tasks):
@@ -662,7 +661,7 @@ class Resolver {
                                     if (idx == -1) {
                                         names.push( match.name );
                                         methods.push(
-                                            { name:match.name, type:match.type, hits:[ {sig:signature, expr:e} ] }
+                                            { name:match.name, type:match.type, meta:match.meta, hits:[ {sig:signature, expr:e} ] }
                                         );
 
                                     } else {
@@ -699,17 +698,32 @@ class Resolver {
                         if (debug) {
                             trace( '--checking...--' );
                             trace( 'field name      :   ' + field.name );
-                            trace( 'normal type     :   ' + field.type );
-                            trace( 'reduced type    :   ' + field.type.follow() );
-                            trace( 'signature       :   ' + last.sig );
+                            trace( 'normal type     :   ' + field.type.toString() );
+                            trace( 'reduced type    :   ' + field.type.follow().toString() );
+                            trace( 'last hit sig    :   ' + last.sig.toString() );
                         }
 
                         if (field.type.follow().unify(last.sig)) {
                             if (debug) {
                                 trace( '<--unified-->' );
                                 trace( 'field name  :   ' + field.name );
+                                trace( 'last expr   :   ' + last.expr.toString() );
                             }
                             result = last.expr.field( field.name );
+
+                            var binder = field.meta.filter( m -> m.name == ':resolver.self.bind' );
+                            if (binder.length != 0) {
+                                var expr = switch tasks[0] {
+                                    case SearchMethod(signature, module, statics, e, fieldEReg, metaEReg): e;
+                                    case _: null;
+                                }
+                                var args = [macro $e{expr}];
+                                for (i in 0...(Std.parseInt( binder[0].params[0].toString() ))) {
+                                    args.push( macro _ );
+                                }
+                                result = macro $e{result}.bind($a{args});
+                            }
+
                             break;
 
                         } else {
