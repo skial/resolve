@@ -165,7 +165,7 @@ class Resolver {
                     var tasks = [];
 
                     if (clsr != null) {
-                        if (debug) trace( 'Checking the implemenation class for instance fields.' );
+                        if (debug) trace( 'Checking the abstract implemenation class for instance fields.' );
                         // Check the implementation class for instance fields first.
                         tasks.push( SearchMethod(rawOutput, TInst(clsr, []), false, expr, fieldEReg, metaEReg) );
 
@@ -178,7 +178,7 @@ class Resolver {
                         tasks.push( SearchMethod(rawOutput, TAbstract(absr, params), false, expr, fieldEReg, metaEReg) );
                     }
 
-                    result = Multiple(tasks);
+                    result = (tasks.length == 1) ? tasks[0] : Multiple(tasks);
 
                 case x:
                     throw x;
