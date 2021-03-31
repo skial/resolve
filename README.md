@@ -4,7 +4,7 @@ An `abstract` type to help filter and select functions based on method signature
 
 ### Why tho?
 
-Coerce is more useful for when dealing with user provided types during macro generation. _If using coerce in macros, its recommended to use the `be.macros.Resolver` methods directly._
+Coerce is more useful for when dealing with user provided types during macro generation. _If using coerce in other macros, it is recommended to use the `be.macros.Resolver` methods directly._
 
 ### Type Support
 
@@ -31,9 +31,9 @@ Classes and Abstracts are supported, currently. There are two ways of searching,
 
 ##### Filtering against metadata
 
-> A fields metadata object is stringified using `haxe.macro.Printer` so it can be checked with the provided `EReg`.
+> Notice the open and close brackets `()` are escaped.
 - ```haxe
-  var r:Resolve<Int->Int, ~//, ~/@:op([\w\d\s]+\+[\w\d\s]+)/> = /*Search against instance or static expression*/.
+  var r:Resolve<Int->Int, ~//, ~/@:op\([\w\d\s]+\+[\w\d\s]+\)/> = /*Search against instance or static expression*/.
   ```
 
 ##### Abstract Support
