@@ -95,7 +95,7 @@ class Main {
     public static function main() {
         var input = '999';
         var r:Resolve<String->Int, ~/int/i, ~//i> = resolve(Std);
-        // `r` is already resolved, so gets passed `Std.parseInt`.
+        // `r` is already resolved, so gets passed as `Std.parseInt`.
         trace( asInt(r, input) );       // trace(999);
         // Resolves to `Std.parseInt`.
         trace( asInt(Std, input) );     // trace(999);
@@ -145,7 +145,7 @@ public class Fake {
 }
 ```
 
-### `be.macros.Resolver`
+### ⚠ `be.macros.Resolver`
 
 Take a look at the source for `be.coerce.Resolve` for getting started.
 
