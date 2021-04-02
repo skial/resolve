@@ -66,12 +66,11 @@ class PickSpec {
         return asserts.done();
     }
 
-    // Idk if this fits...
     public function testPick_abstractInstance() {
         var a:Qux = 10;
-        var p:Pick<Int->Int->Int, ~/@:op\([a-z ]+\+[a-z ]+\)/i> = a;
+        var p:Pick<Int->Int, ~/@:op\([a-z ]+\+[a-z ]+\)/i> = a;
 
-        asserts.assert( p(a, 10) == 20 );
+        asserts.assert( p(10) == 20 );
 
         return asserts.done();
     }

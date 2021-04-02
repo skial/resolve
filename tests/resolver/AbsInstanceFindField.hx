@@ -32,4 +32,9 @@ abstract AbsInstanceHelper(Int) {
         return v.toUpperCase();
     }
 
+    public function shoutLen(v:String):Int {
+        throw 'Method shoutLen should not be selected';
+        return v.length;
+    }
+
 }

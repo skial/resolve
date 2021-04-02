@@ -12,7 +12,10 @@ using StringTools;
 using haxe.macro.Context;
 using tink.CoreApi;
 using tink.MacroApi;
+using haxe.macro.TypeTools;
 
+@:forward
+@:forwardStatics
 enum abstract LocalDefines(Defines) {
     public var CoerceVerbose = 'coerce_verbose';
     
@@ -26,7 +29,15 @@ enum abstract LocalDefines(Defines) {
     @:op(!A) private static function negate(a:LocalDefines):Bool;
 }
 
+@:forward
+@:forwardStatics
+enum abstract LocalMetas(Metas) to String {
+    public var ResolverBind = ':resolver.self.bind';
+}
+
 class Resolver {
+
+    private static final printer = new haxe.macro.Printer();
 
     @:persistent public static var stringMap = [
         'Int' => macro Std.parseInt,
@@ -59,7 +70,7 @@ class Resolver {
 
     public static function determineTask(expr:Expr, input:Type, output:Type, ?debug:Bool):ResolveTask {
         if (debug == null) debug = Debug && CoerceVerbose;
-        var result = null;
+        var result:ResolveTask = null;
 
         // Yes this is a lazy hack but its for future me.
         if ('$output'.indexOf('TAbstract(be.types.Pick') > -1) {
@@ -67,7 +78,7 @@ class Resolver {
             output = Context.typeof(macro (null:$c).asResolve());
         }
 
-        var rawInput = input.followWithAbstracts();
+        //var rawInput = input.followWithAbstracts();
         //  Assume its in a raw form, i.e not an abstract or typedef redeclaration.
         var rawOutput = output;
         var isResolve = false;
@@ -94,6 +105,9 @@ class Resolver {
                 // Extract the EReg constants.
                 for (i in 1...3) if (params[i] != null) switch params[i] {
                     case TInst(_.get() => {kind:KExpr(_.expr => EConst(CRegexp(r, o)))}, _):
+                        if (debug) {
+                            trace( i, r, o );
+                        }
                         if (i == 1) fieldEReg = new EReg(fieldString = r, o);
                         if (i == 2) metaEReg = new EReg(metaString = r, o);
 
@@ -154,23 +168,25 @@ class Resolver {
                 var _:Resolve<$rawOutput, EReg, EReg> = instance;
                 */
                 case TAbstract(absr = _.get() => abs, params):
-                    if (debug) trace( 'instance abstract   :   ' + absr.toString() );
-                    var clsr = abs.impl != null ? abs.impl : null;
+                    if (debug) trace( 'Instance Abstract   :   ' + absr.toString() );
+                    var clsr = abs.impl;
                     var tasks = [];
 
                     if (clsr != null) {
+                        if (debug) trace( 'Checking the abstract implemenation class for instance fields.' );
                         // Check the implementation class for instance fields first.
                         tasks.push( SearchMethod(rawOutput, TInst(clsr, []), false, expr, fieldEReg, metaEReg) );
 
                     }
 
                     if (metaString != '') {
+                        if (debug) trace( 'Checking Abstract instance & static fields');
                         // It has a metadata ereg, so set the abstract to be checked.
                         tasks.push( SearchMethod(rawOutput, TAbstract(absr, params), true, absr.toString().resolve(), fieldEReg, metaEReg) );
                         tasks.push( SearchMethod(rawOutput, TAbstract(absr, params), false, expr, fieldEReg, metaEReg) );
                     }
 
-                    result = Multiple(tasks);
+                    result = (tasks.length == 1) ? tasks[0] : Multiple(tasks);
 
                 case x:
                     throw x;
@@ -184,13 +200,21 @@ class Resolver {
         }
 
         if (debug) {
-            trace( result );
+            switch result {
+                case Multiple(tasks):
+                    trace('<Multiple>');
+                    for (task in tasks) trace( task );
+
+                case _:
+                    trace(result);
+
+            }
         }
 
         return result;
     }
 
-    public static function findMethod(signature:Type, module:Type, statics:Bool, pos:Position, ?fieldEReg:EReg, ?metaEReg:EReg, ?debug:Bool):Outcome<Array<{name:String, type:Type}>, Error> {
+    public static function findMethod(signature:Type, module:Type, statics:Bool, pos:Position, ?fieldEReg:EReg, ?metaEReg:EReg, ?debug:Bool):Outcome<Array<{name:String, type:Type, meta:Metadata}>, Error> {
         if (debug == null) debug = Debug && CoerceVerbose;
         var results = [];
         var blankField = fieldEReg == null || '$fieldEReg'.startsWith('~//');
@@ -216,7 +240,9 @@ class Resolver {
                 var fields:Array<{name:String, type:Type, meta:Metadata}> = switch module {
                     // The class which is auto generated for abstracts.
                     case TInst(clsr = _.get() => cls = {kind:KAbstractImpl(absr)}, params):
-                        if (debug) trace( 'instance abstract' );
+                        if (debug) {
+                            trace( "Instance abstract `new T`" ); 
+                        }
                         var fs = [];
                         // Afaik, all abstract methods get converted to statics?
                         var sfields = cls.statics.get();
@@ -226,42 +252,58 @@ class Resolver {
                             // Get the underlying type of the Abstract
                             var raw = abs.type;
                             /**
-                                Find all fields with @:impl metadata.
-                                This is all non static fields in the Abstract, that
-                                the compiler converts to statics, adding the `raw` type
-                                as the first argument.
+                                The compiler used to mark all non static fields in an
+                                Abstract which would be converted to statics with
+                                `@:impl` metadata, which helped reduce fields to check
+                                against.
                                 ---
-                                ```
-                                abstract Bar(Int) {
-                                    function foo(str:String):String;
-                                }
-                                ```
-                                becomes:
-                                ```
-                                static function foo(this:Int, str:String):String;
-                                ```
-                            */
-                            var impls = sfields.filter( f -> f.meta.has(Metas.Impl) );
-                            // As `Resolve` relies on exact types, pop the first argument off.
+                                All the tests still pass, hopefully it was a pointless check
+                                in this first place.
+                            **/
+                            var impls = sfields;//.filter( f -> f.meta.has(Metas.Impl) );
+                            
                             for (field in impls) {
                                 switch field.type.follow() {
-                                    case TFun(args, ret) if (args.length > 1 && args[0].t.unify(raw)):
-                                        fs.push( {
-                                            name: field.name,
-                                            type: TFun(args.slice(1), ret),
-                                            meta: field.meta.get(),
-                                        } );
+                                    case x = TFun(args, ret):
+                                        if (debug) {
+                                            trace( args.length, args );
+                                            trace( args[0].t, args[0].t.followWithAbstracts(), args[0].t.followWithAbstracts().unify(raw) );
+
+                                        }
+                                        /**
+                                            Since we are searching an Abstract type as an instance/reference,
+                                            e.g `_:Resolve<_, _, _> = ref;` the type signature needs patching.
+                                            ---
+                                            Abstract fields that are written as non static fields get
+                                            converted to static fields, with the Abstract type as the first arg.
+                                            `function foo(v:String):Bool` -> `static function foo(self:Abs, v:String):Bool`
+                                            ---
+                                            Pop the first arg off the type signature but mark the type with
+                                            `@:resolver.self.bind`, this is needed when creating the call expression.
+                                        **/
+                                        if (args.length > 1 && args[0].t.followWithAbstracts().unify(raw)) {
+                                            field.meta.add( ResolverBind, [macro $v{args.length-1}], field.pos );
+                                            fs.push( {
+                                                name: field.name,
+                                                type: TFun(args.slice(1), ret),
+                                                meta: field.meta.get(),
+                                            } );
+
+                                        } else {
+                                            if (debug) trace( field.name, x );
+
+                                        }
 
                                     case x:
-                                        if (debug) trace( x );
+                                        if (debug) trace( field.name, x );
 
                                 }
 
                             }
 
                         } else {
-                            // Filter out `@:impl` methods we want are the original statics.
-                            for (field in sfields) if (!field.meta.has(Metas.Impl)) {
+                            // See `@:impl` commment above.
+                            for (field in sfields) /*if (!field.meta.has(Metas.Impl))*/ {
                                 fs.push( {name:field.name, type:field.type, meta:field.meta.get()} );
                             }
 
@@ -270,15 +312,23 @@ class Resolver {
                         fs;
 
                     case TInst(_.get() => cls, params):
-                        if (debug) trace( 'class' );
+                        if (debug) trace( 'Class' );
                         var fs = statics ? cls.statics.get() : cls.fields.get();
                         fs.map( f -> {name:f.name, type:f.type, meta:f.meta.get()} );
 
                     case TAbstract(_.get() => abs, params) if (metaEReg != null):
-                        if (debug) trace( 'abstract' );
+                        if (debug) {
+                            trace( 'Abstract `:T`' );
+                            trace( 'Check statics:  $statics' );
+                        }
+
                         var fs = [];
 
                         if (statics) {
+                            /**
+                                Abstract features, dependent on metadata has already been parsed by the compiler,
+                                but we still have to check the regular expression matches, manually.
+                            **/
                             if (metaEReg.match('@' + Metas.From)) {
                                 for (f in abs.from) if (f.field != null) {
                                     fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
@@ -290,14 +340,26 @@ class Resolver {
                             // Check all Binops
                             var op = '@' + Metas.Op;
                             var binop = ['+', '-', '/', '*', '<<', '>>', '>>>', '|', '&', '^', '%', '=', '!=', '>', '>=', '<', '<=', '&&', '||', '...', '=>', 'in'];
-                            // push binop assigns operators.
+                            // Push binop assigns operators. Eg. `+=` or `*=`.
                             for (i in 0...12) binop.push( binop[i] + '=' );
                             
-                            for (b in binop) if (metaEReg.match(op + '(A $b B)')) {
-                                for (f in abs.binops) if (f.field != null) {
-                                    fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
+                            if (debug) trace( metaEReg );
+                            for (b in binop) {
+                                if (metaEReg.match(op + '(A $b B)')) {
+                                    if (debug) {
+                                        trace( metaEReg );
+                                        trace( 'Matched binop:  $b' );
+                                    }
+
+                                    for (f in abs.binops) if (f.field != null) {
+                                        if (debug) trace( 'Adding @:op overload `$b` method ${f.field.name}' );
+                                        fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
+                                    }
+
+                                    // TODO Should we break on the first match...
+                                    break;
                                 }
-                                break;
+
                             }
     
                             var unop = ['++', '--', '!', '-', '~'];
@@ -305,8 +367,11 @@ class Resolver {
                                 for (f in abs.unops) if (f.field != null) {
                                     fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
                                 }
+
+                                // TODO Should we break on the first match...
                                 break;
                             }
+
                             // Check postfix.
                             for (u in ['++', '--']) if (metaEReg.match(op + '(A$u)')) {
                                 for (f in abs.unops) if (f.field != null) {
@@ -327,7 +392,7 @@ class Resolver {
                             }
 
                         } else {
-                            // Check @:to implicit cats
+                            // Check @:to implicit casts
                             if (metaEReg.match('@' + Metas.To)) for (f in abs.to) {
                                 fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
                             }
@@ -358,6 +423,36 @@ class Resolver {
                     var f1total = 0;
                     var f2total = 0;
 
+                    /**
+                        Check the equality of types signatures, which is preferred over unifying types.
+                        Type to String equality is gonna bite me in the ass.
+                    **/
+                    switch ([signature, f1.type, f2.type]) {
+                        case [TFun(args, ret), TFun(args1, ret1), TFun(args2, ret2)]:
+                            var idents = args.map( a -> a.t.toString() );
+                            var retIdent = ret.toString();
+
+                            if (args.length == args1.length && retIdent == ret1.toString()) {
+                                for (i in 0...args1.length) if (idents[i] == args1[i].t.toString()) {
+                                    f1total++;
+                                }
+
+                            }
+
+                            if (args.length == args2.length && retIdent == ret2.toString()) {
+                                for (i in 0...args2.length) if (idents[i] == args2[i].t.toString()) {
+                                    f2total++;
+                                }
+                                
+                            }
+
+                            if (f1.type.unify(signature)) f1total++;
+                            if (f2.type.unify(signature)) f2total++;
+
+                        case _:
+
+                    }
+
                     if (!fieldMatch) {
                         switch [fieldEReg.match(f1.name), fieldEReg.match(f2.name)] {
                             case [true, false]: f1total++;
@@ -368,7 +463,6 @@ class Resolver {
                     }
 
                     if (!metaMatch) {
-                        var printer = new haxe.macro.Printer();
                         for (meta in f1.meta) {
                             var str = printer.printMetadata(meta);
                             if (debug) trace(str);
@@ -429,17 +523,8 @@ class Resolver {
 
         var isAbstract = output.reduce().match(TAbstract(_, _));
         var outputComplex = output.toComplexType();
-        var unified = (
-            isAbstract && 
-            (macro ($value:$outputComplex)).typeof().isSuccess()
-            ) 
-            || 
-            (
-            input.unify(output) ||
-            input.unify(output.follow()) ||
-            input.follow().unify(output) ||
-            input.follow().unify(output.follow())
-            );
+        var unified = ( isAbstract && (macro ($value:$outputComplex)).typeof().isSuccess() ) || 
+        ( input.unify(output) || input.unify(output.follow()) || input.follow().unify(output) || input.follow().unify(output.follow()) );
 
         if (debug) {
             trace( 'unified         :   ' + unified );
@@ -461,9 +546,9 @@ class Resolver {
             trace( 'OUT unify []    :   ' + outMatchesArray );
         }
         
-        // Ouput expects an array, so just wrap the value. `[value]`
+        // Ouput expects an array, so just wrap the value. `[value]`.
         if (outMatchesArray && !inMatchesArray) {
-            // Switch into the Array `<T>` type and fetch its parameter.
+            // Switch into the Array `<T>` type and fetch its type parameter.
             switch output {
                 case TInst(_, [t1]):
                     if (debug) trace( '[] `<T>`    :   ' + t1 );
@@ -473,7 +558,6 @@ class Resolver {
                             return Success( macro @:pos(pos) [$r] );
 
                         case Failure(e): 
-                            //Context.fatalError( e.toString(), e.pos );
                             error = e;
 
                     }
@@ -501,11 +585,13 @@ class Resolver {
                 case x: if (debug) trace( x );
             }
 
-            // Get the expr needed to convert from one type to another.
-            // Use `macro v` as the expr, as the mapping happens after this, if successful.
+            /**
+                Get the expr needed to convert from one type to another.
+                Use `macro v` as the expr, as the mapping happens after this, if successful.
+            **/
             switch convertValue(t1, t2, macro v) {
                 case Success(r): return Success( macro @:pos(pos) $value.map(v->$r) );
-                case Failure(e): error = e;//Context.warning( e.toString(), e.pos );
+                case Failure(e): error = e;
             }
 
         }
@@ -560,9 +646,10 @@ class Resolver {
         var pos = Context.currentPos();
 
         switch task {
+            // Multiple is a mess still.
             case Multiple(tasks):
                 var names:Array<String> = [];
-                var methods:Array<{name:String, type:Type, hits:Array<{sig:Type, expr:Expr}>}> = [];
+                var methods:Array<{name:String, type:Type, meta:Metadata, hits:Array<{sig:Type, expr:Expr}>}> = [];
                 
                 for (task in tasks) switch task {
                     case Multiple(tasks):
@@ -574,13 +661,14 @@ class Resolver {
                             case Success(matches):
                                 if (matches.length == 0) continue;
                                 if (debug) trace( 'matches     :   ' + matches.map( m -> m.name ) );
+
                                 for (match in matches) {
                                     var idx = names.indexOf(match.name);
 
                                     if (idx == -1) {
                                         names.push( match.name );
                                         methods.push(
-                                            { name:match.name, type:match.type, hits:[ {sig:signature, expr:e} ] }
+                                            { name:match.name, type:match.type, meta:match.meta, hits:[ {sig:signature, expr:e} ] }
                                         );
 
                                     } else {
@@ -617,18 +705,46 @@ class Resolver {
                         if (debug) {
                             trace( '--checking...--' );
                             trace( 'field name      :   ' + field.name );
-                            trace( 'normal type     :   ' + field.type );
-                            trace( 'reduced type    :   ' + field.type.follow() );
-                            trace( 'signature       :   ' + last.sig );
+                            trace( 'normal type     :   ' + field.type.toString() );
+                            trace( 'reduced type    :   ' + field.type.follow().toString() );
+                            trace( 'last hit sig    :   ' + last.sig.toString() );
                         }
 
                         if (field.type.follow().unify(last.sig)) {
                             if (debug) {
                                 trace( '<--unified-->' );
                                 trace( 'field name  :   ' + field.name );
+                                trace( 'last expr   :   ' + last.expr.toString() );
                             }
                             result = last.expr.field( field.name );
+
+                            /**
+                                This means an instance/reference to an Abstract was passed in,
+                                and a static field was matched, requiring the first arg to the ref.
+                            **/
+                            var binder = field.meta.filter( m -> m.name == ResolverBind );
+                            if (binder.length != 0) {
+                                var expr = switch tasks[0] {
+                                    case SearchMethod(signature, module, statics, e, fieldEReg, metaEReg): e;
+                                    case _: null;
+                                }
+
+                                var args = [macro $e{expr}];
+                                for (i in 0...(Std.parseInt( binder[0].params[0].toString() ))) {
+                                    args.push( macro _ );
+                                }
+
+                                // I assume the compiler is smart enough to remove the `.bind`
+                                result = macro $e{result}.bind($a{args});
+                            }
+
                             break;
+
+                        } else {
+                            if (debug) {
+                                trace('<--mismatch-->');
+                                trace( 'field name  :   ' + field.name );
+                            }
 
                         }
 
