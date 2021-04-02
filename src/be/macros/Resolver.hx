@@ -14,6 +14,8 @@ using tink.CoreApi;
 using tink.MacroApi;
 using haxe.macro.TypeTools;
 
+@:forward
+@:forwardStatics
 enum abstract LocalDefines(Defines) {
     public var CoerceVerbose = 'coerce_verbose';
     
@@ -25,6 +27,12 @@ enum abstract LocalDefines(Defines) {
     @:op(A && B) private static function and(a:LocalDefines, b:Bool):Bool;
     @:op(A != B) private static function not(a:LocalDefines, b:Bool):Bool;
     @:op(!A) private static function negate(a:LocalDefines):Bool;
+}
+
+@:forward
+@:forwardStatics
+enum abstract LocalMetas(Metas) to String {
+    public var ResolverBind = ':resolver.self.bind';
 }
 
 class Resolver {
@@ -70,7 +78,7 @@ class Resolver {
             output = Context.typeof(macro (null:$c).asResolve());
         }
 
-        var rawInput = input.followWithAbstracts();
+        //var rawInput = input.followWithAbstracts();
         //  Assume its in a raw form, i.e not an abstract or typedef redeclaration.
         var rawOutput = output;
         var isResolve = false;
@@ -233,7 +241,7 @@ class Resolver {
                     // The class which is auto generated for abstracts.
                     case TInst(clsr = _.get() => cls = {kind:KAbstractImpl(absr)}, params):
                         if (debug) {
-                            trace( "Instance abstract `new T`" );
+                            trace( "Instance abstract `new T`" ); 
                         }
                         var fs = [];
                         // Afaik, all abstract methods get converted to statics?
@@ -244,34 +252,16 @@ class Resolver {
                             // Get the underlying type of the Abstract
                             var raw = abs.type;
                             /**
-                                Find all fields with @:impl metadata.
-                                This is all non static fields in the Abstract, that
-                                the compiler converts to statics, adding the `raw` type
-                                as the first argument.
+                                The compiler used to mark all non static fields in an
+                                Abstract which would be converted to statics with
+                                `@:impl` metadata, which helped reduce fields to check
+                                against.
                                 ---
-                                ```
-                                abstract Bar(Int) {
-                                    function foo(str:String):String;
-                                }
-                                ```
-                                becomes:
-                                ```
-                                static function foo(this:Int, str:String):String;
-                                ```
-                            */
-                            if (debug) {
-                                var printer = new haxe.macro.Printer();
-                                trace( sfields.map( f->f.name + ':' + f.meta.get().map(m->printer.printMetadata(m))) );
-                            }
+                                All the tests still pass, hopefully it was a pointless check
+                                in this first place.
+                            **/
                             var impls = sfields;//.filter( f -> f.meta.has(Metas.Impl) );
-                            if (debug) {
-                                trace('Found @:impl:   ' + impls.map(f->f.name));
-                            }
-                            // As `Resolve` relies on exact types, pop the first argument off.
-                            // TODO - see if its possible to use a closure, binding the first arg so the signature is shortened but still works
-                            // with abstract `@:op(a + b)` statics but in an instanced usage, `a + 10` which gets compiled to static call `T.add(a, 10)`.
-                            // Closure would be `b -> a + b`;
-                            if (debug) trace( raw );
+                            
                             for (field in impls) {
                                 switch field.type.follow() {
                                     case x = TFun(args, ret):
@@ -280,8 +270,19 @@ class Resolver {
                                             trace( args[0].t, args[0].t.followWithAbstracts(), args[0].t.followWithAbstracts().unify(raw) );
 
                                         }
+                                        /**
+                                            Since we are searching an Abstract type as an instance/reference,
+                                            e.g `_:Resolve<_, _, _> = ref;` the type signature needs patching.
+                                            ---
+                                            Abstract fields that are written as non static fields get
+                                            converted to static fields, with the Abstract type as the first arg.
+                                            `function foo(v:String):Bool` -> `static function foo(self:Abs, v:String):Bool`
+                                            ---
+                                            Pop the first arg off the type signature but mark the type with
+                                            `@:resolver.self.bind`, this is needed when creating the call expression.
+                                        **/
                                         if (args.length > 1 && args[0].t.followWithAbstracts().unify(raw)) {
-                                            field.meta.add( ':resolver.self.bind', [macro $v{args.length-1}], field.pos );
+                                            field.meta.add( ResolverBind, [macro $v{args.length-1}], field.pos );
                                             fs.push( {
                                                 name: field.name,
                                                 type: TFun(args.slice(1), ret),
@@ -301,8 +302,8 @@ class Resolver {
                             }
 
                         } else {
-                            // Filter out `@:impl` methods we want are the original statics.
-                            for (field in sfields) if (!field.meta.has(Metas.Impl)) {
+                            // See `@:impl` commment above.
+                            for (field in sfields) /*if (!field.meta.has(Metas.Impl))*/ {
                                 fs.push( {name:field.name, type:field.type, meta:field.meta.get()} );
                             }
 
@@ -324,6 +325,10 @@ class Resolver {
                         var fs = [];
 
                         if (statics) {
+                            /**
+                                Abstract features, dependent on metadata has already been parsed by the compiler,
+                                but we still have to check the regular expression matches, manually.
+                            **/
                             if (metaEReg.match('@' + Metas.From)) {
                                 for (f in abs.from) if (f.field != null) {
                                     fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
@@ -345,10 +350,13 @@ class Resolver {
                                         trace( metaEReg );
                                         trace( 'Matched binop:  $b' );
                                     }
+
                                     for (f in abs.binops) if (f.field != null) {
                                         if (debug) trace( 'Adding @:op overload `$b` method ${f.field.name}' );
                                         fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
                                     }
+
+                                    // TODO Should we break on the first match...
                                     break;
                                 }
 
@@ -359,8 +367,11 @@ class Resolver {
                                 for (f in abs.unops) if (f.field != null) {
                                     fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
                                 }
+
+                                // TODO Should we break on the first match...
                                 break;
                             }
+
                             // Check postfix.
                             for (u in ['++', '--']) if (metaEReg.match(op + '(A$u)')) {
                                 for (f in abs.unops) if (f.field != null) {
@@ -413,12 +424,14 @@ class Resolver {
                     var f2total = 0;
 
                     /**
-                        Check the equality of types signatures, which is preferred above unifying types.
+                        Check the equality of types signatures, which is preferred over unifying types.
+                        Type to String equality is gonna bite me in the ass.
                     **/
                     switch ([signature, f1.type, f2.type]) {
                         case [TFun(args, ret), TFun(args1, ret1), TFun(args2, ret2)]:
                             var idents = args.map( a -> a.t.toString() );
                             var retIdent = ret.toString();
+                            
                             if (args.length == args1.length && retIdent == ret1.toString()) {
                                 for (i in 0...args1.length) if (idents[i] == args1[i].t.toString()) {
                                     f1total++;
