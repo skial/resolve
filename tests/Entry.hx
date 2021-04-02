@@ -26,6 +26,7 @@ class Entry {
             new resolver.AbsInstance(),
             new resolver.AbsInstanceFindField(),
             new resolver.AbsInstanceWithMeta(),
+            new resolver.AbsInstanceMatchStatic(),
             new CoerceSpec(),
             new ResolveSpec(),
             new PickSpec(),
