@@ -1,3 +1,3 @@
-# @install: lix --silent download "gh://github.com/skial/haxe.macro.Defines#14933a2b77504bd800bdcd90a610a17c15252af8" into haxe.macro.Defines/0.0.1/github/14933a2b77504bd800bdcd90a610a17c15252af8
--cp ${HAXE_LIBCACHE}/haxe.macro.Defines/0.0.1/github/14933a2b77504bd800bdcd90a610a17c15252af8/src
+# @install: lix --silent download "gh://github.com/skial/haxe.macro.Defines#8428b3d7d2af939c52bdb0ced4c114524a5d9541" into haxe.macro.Defines/0.0.1/github/8428b3d7d2af939c52bdb0ced4c114524a5d9541
+-cp ${HAXE_LIBCACHE}/haxe.macro.Defines/0.0.1/github/8428b3d7d2af939c52bdb0ced4c114524a5d9541/src
 -D haxe.macro.Defines=0.0.1
