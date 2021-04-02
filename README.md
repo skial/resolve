@@ -1,6 +1,6 @@
 # coerce
 
-An `abstract` type to help filter and select functions based on method signatures and regular expressions for naming schemes and metadata.
+An `abstract` type to help filter and select functions based on method signatures and regular expressions for naming schemes and metadata usage.
 
 ### Why tho?
 
