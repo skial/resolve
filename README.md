@@ -38,11 +38,9 @@ Classes and Abstracts are supported, currently. There are two ways of searching,
 
 ##### Abstract Support
 
-> Abstracts are compile time only types, with many features which can result in complex usage. Pairing them with macros make this more difficult. 🐲 
+> Abstracts are compile time only types, with many features which can result in complex usage. Pairing them with macros make this more difficult. 🔥🐲 
 
-To access Abstract features like `@:to`, `@:from`, `@:op(_)` etc, the meta filter needs to match the respective metadata for that feature. 
-
-Some of these features are `static` implementations. An Abstract *instance* passed to a `Resolve` type with a matching meta `EReg` will be changed to the *static* representation and in doing so, dropping the instance reference.
+To access Abstract features like `@:to`, `@:from`, `@:op(_)` etc, the metadata filter needs to match the respective metadata for that feature.
 
 ### Types API
 
