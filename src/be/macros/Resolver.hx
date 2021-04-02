@@ -431,7 +431,7 @@ class Resolver {
                         case [TFun(args, ret), TFun(args1, ret1), TFun(args2, ret2)]:
                             var idents = args.map( a -> a.t.toString() );
                             var retIdent = ret.toString();
-                            
+
                             if (args.length == args1.length && retIdent == ret1.toString()) {
                                 for (i in 0...args1.length) if (idents[i] == args1[i].t.toString()) {
                                     f1total++;
@@ -523,17 +523,8 @@ class Resolver {
 
         var isAbstract = output.reduce().match(TAbstract(_, _));
         var outputComplex = output.toComplexType();
-        var unified = (
-            isAbstract && 
-            (macro ($value:$outputComplex)).typeof().isSuccess()
-            ) 
-            || 
-            (
-            input.unify(output) ||
-            input.unify(output.follow()) ||
-            input.follow().unify(output) ||
-            input.follow().unify(output.follow())
-            );
+        var unified = ( isAbstract && (macro ($value:$outputComplex)).typeof().isSuccess() ) || 
+        ( input.unify(output) || input.unify(output.follow()) || input.follow().unify(output) || input.follow().unify(output.follow()) );
 
         if (debug) {
             trace( 'unified         :   ' + unified );
@@ -555,9 +546,9 @@ class Resolver {
             trace( 'OUT unify []    :   ' + outMatchesArray );
         }
         
-        // Ouput expects an array, so just wrap the value. `[value]`
+        // Ouput expects an array, so just wrap the value. `[value]`.
         if (outMatchesArray && !inMatchesArray) {
-            // Switch into the Array `<T>` type and fetch its parameter.
+            // Switch into the Array `<T>` type and fetch its type parameter.
             switch output {
                 case TInst(_, [t1]):
                     if (debug) trace( '[] `<T>`    :   ' + t1 );
@@ -567,7 +558,6 @@ class Resolver {
                             return Success( macro @:pos(pos) [$r] );
 
                         case Failure(e): 
-                            //Context.fatalError( e.toString(), e.pos );
                             error = e;
 
                     }
@@ -595,11 +585,13 @@ class Resolver {
                 case x: if (debug) trace( x );
             }
 
-            // Get the expr needed to convert from one type to another.
-            // Use `macro v` as the expr, as the mapping happens after this, if successful.
+            /**
+                Get the expr needed to convert from one type to another.
+                Use `macro v` as the expr, as the mapping happens after this, if successful.
+            **/
             switch convertValue(t1, t2, macro v) {
                 case Success(r): return Success( macro @:pos(pos) $value.map(v->$r) );
-                case Failure(e): error = e;//Context.warning( e.toString(), e.pos );
+                case Failure(e): error = e;
             }
 
         }
@@ -654,6 +646,7 @@ class Resolver {
         var pos = Context.currentPos();
 
         switch task {
+            // Multiple is a mess still.
             case Multiple(tasks):
                 var names:Array<String> = [];
                 var methods:Array<{name:String, type:Type, meta:Metadata, hits:Array<{sig:Type, expr:Expr}>}> = [];
@@ -668,6 +661,7 @@ class Resolver {
                             case Success(matches):
                                 if (matches.length == 0) continue;
                                 if (debug) trace( 'matches     :   ' + matches.map( m -> m.name ) );
+
                                 for (match in matches) {
                                     var idx = names.indexOf(match.name);
 
@@ -724,16 +718,23 @@ class Resolver {
                             }
                             result = last.expr.field( field.name );
 
-                            var binder = field.meta.filter( m -> m.name == ':resolver.self.bind' );
+                            /**
+                                This means an instance/reference to an Abstract was passed in,
+                                and a static field was matched, requiring the first arg to the ref.
+                            **/
+                            var binder = field.meta.filter( m -> m.name == ResolverBind );
                             if (binder.length != 0) {
                                 var expr = switch tasks[0] {
                                     case SearchMethod(signature, module, statics, e, fieldEReg, metaEReg): e;
                                     case _: null;
                                 }
+
                                 var args = [macro $e{expr}];
                                 for (i in 0...(Std.parseInt( binder[0].params[0].toString() ))) {
                                     args.push( macro _ );
                                 }
+
+                                // I assume the compiler is smart enough to remove the `.bind`
                                 result = macro $e{result}.bind($a{args});
                             }
 
