@@ -197,12 +197,22 @@ class Resolver {
             var _type = input.reduce();
             var isStatic = false;
 
+            // TODO implement type parameter handling
+            // rawoutput can have `path.to.Type.T` as an TInst, check `cls.kind`.
+            switch rawOutput {
+                case TInst(_.get() => cls, params):
+                    trace( cls.kind );
+
+                case x:
+                    trace( x );
+            }
+
             switch _type {
-                case TAnonymous(_.get() => {status:AClassStatics(ref)}):
+                case TAnonymous(_.get() => /*anon = */{status:AClassStatics(ref)}):
                     _type = TInst(ref, []);
                     isStatic = true;
 
-                case TAnonymous(_.get() => {status:AClassStatics((clsr = _.get() =>  {kind:KAbstractImpl(absr)})) }):
+                case TAnonymous(_.get() => /*anon = */{status:AClassStatics((clsr = _.get() =>  {kind:KAbstractImpl(absr)})) }):
                     _type = TInst(clsr, []);
                     isStatic = true;
 
@@ -213,7 +223,8 @@ class Resolver {
 
                     }
                 
-                case _:
+                case x:
+                    if (debug) trace( x );
 
             }
 
@@ -536,10 +547,7 @@ class Resolver {
         }
 
         var fields = switch module {
-            //case TAbstract(_.get() => abs, params):
-
-
-            case TInst(_.get() => cls, params):
+            case TInst(_.get() => cls, _):
                 if (statics) {
                     cls.statics.get();
 
@@ -561,13 +569,26 @@ class Resolver {
             if (debug) {
                 trace( '<filtering properties>' );
                 trace( 'field name  :   ' + field.name );
+                trace( 'signature   :   ' + signature.toString() );
                 trace( 'field type  :   ' + field.type.toString() );
             }
 
-            var typeMatch = field.type.unify(signature);
-            var nameMatch = !blankField ? fieldEReg.match( field.name ) : blankField;
-            var metaMatch = !blankMeta ? field.meta.get().filter( m -> metaEReg.match( printer.printMetadata(m) )).length > 0 : blankMeta;
-            return typeMatch && nameMatch && metaMatch;
+            if (field.type.unify(signature)) {
+                if (debug) trace( 'type match   :   true' );
+                return true;
+            }
+            
+            if (!blankField && fieldEReg.match( field.name )) {
+                if (debug) trace( 'field match   :   true' );
+                return true;
+            }
+
+            if (!blankMeta && field.meta.get().filter( m -> metaEReg.match( printer.printMetadata(m) )).length > 0) {
+                if (debug) trace( 'meta match   :   true' );
+                return true;
+            }
+
+            return false;
         } );
 
         return Success(fields.map( f -> {name:f.name, meta:f.meta.get(), type:f.type }));
