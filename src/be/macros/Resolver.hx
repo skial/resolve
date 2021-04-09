@@ -317,7 +317,9 @@ class Resolver {
                     case TInst(_.get() => cls, params):
                         if (debug) trace( 'Class' );
                         var fs = statics ? cls.statics.get() : cls.fields.get();
-                        fs.map( f -> {name:f.name, type:f.type, meta:f.meta.get()} );
+                        fs
+                            .filter( f -> f.kind.match( FMethod(_) ))
+                            .map( f -> {name:f.name, type:f.type, meta:f.meta.get()} );
 
                     case TAbstract(_.get() => abs, params) if (metaEReg != null):
                         if (debug) {
@@ -528,14 +530,15 @@ class Resolver {
         }
 
         fields = fields
-        .filter( field -> switch field.kind {
-            case FVar(_, _): true;
-            case _: false;
-        } )
         .filter( field -> {
+            if (field.kind.match( FMethod(_) )) return false;
+
             if (debug) {
-                trace( field.name );
+                trace( '<filtering properties>' );
+                trace( 'field name  :   ' + field.name );
+                trace( 'field type  :   ' + field.type.toString() );
             }
+
             var typeMatch = field.type.unify(signature);
             var nameMatch = !blankField ? fieldEReg.match( field.name ) : blankField;
             var metaMatch = !blankMeta ? field.meta.get().filter( m -> metaEReg.match( printer.printMetadata(m) )).length > 0 : blankMeta;

@@ -30,6 +30,7 @@ class Entry {
             new CoerceSpec(),
             new ResolveSpec(),
             new PickSpec(),
+            // Resolving properties
             new resolver.ClassPropertySpec(),
         ])).handle( Runner.exit );
     }
