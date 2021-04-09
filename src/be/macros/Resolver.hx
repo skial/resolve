@@ -138,7 +138,7 @@ class Resolver {
             trace( 'meta ereg       :   ' + metaEReg );
         }
 
-        if (isResolve && isMethod) {
+        if (isMethod) {
             switch input.reduce() {
                 // var _:Resolve<$rawOutput, EReg, EReg> = Abstract;
                 case TAnonymous(_.get() => {status:AClassStatics((clsr = _.get() =>  {kind:KAbstractImpl(absr)})) }):

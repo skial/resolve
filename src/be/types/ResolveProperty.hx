@@ -4,7 +4,6 @@ package be.types;
 import haxe.macro.Expr;
 import haxe.macro.Defines;
 import be.macros.Resolver;
-import be.coerce.ResolveTask;
 
 using haxe.macro.Context;
 using tink.MacroApi;
@@ -31,40 +30,5 @@ using StringTools;
 
         return result;
     }
-
-    /*public static macro function coerce<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
-        if (Debug && CoerceVerbose) {
-            trace( 'start: coerce property' );
-            trace( expr.toString(), expr.pos );
-        }
-
-        var task = Resolver.determineTask( expr, expr.typeof().sure(), Context.getExpectedType() );
-        var result:Expr = Resolver.handleTask(task);
-
-        if (Debug && CoerceVerbose) {
-            trace(result.toString());
-        }
-
-        return result;
-    }
-
-    /*@:noCompletion @:from public static macro function catchAll<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
-        if (Debug && CoerceVerbose) {
-            trace( 'start: catch all' );
-            trace( expr.toString(), expr.pos );
-        }
-
-        var task = Resolver.determineTask( expr, expr.typeof().sure(), Context.getExpectedType() );
-        var result:Expr = Resolver.handleTask(task);
-
-        // Not happy about `cast`ing this...
-        result = macro cast $result;
-
-        if (Debug && CoerceVerbose) {
-            trace(result.toString());
-        }
-
-        return result;
-    }*/
 
 }
