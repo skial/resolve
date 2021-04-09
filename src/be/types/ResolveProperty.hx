@@ -31,4 +31,20 @@ using StringTools;
         return result;
     }
 
+    @:noCompletion @:from public static macro function catchAll<Out>(expr:Expr):ExprOf<Out> {
+        if (Debug && CoerceVerbose) {
+            trace( 'start: catchall property' );
+            trace( expr.toString(), expr.pos );
+        }
+        
+        var task = Resolver.determineTask( expr, expr.typeof().sure(), Context.getExpectedType() );
+        var result:Expr = Resolver.handleTask(task);
+
+        if (Debug && CoerceVerbose) {
+            trace( result.toString() );
+        }
+
+        return result;
+    }
+
 }

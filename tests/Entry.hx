@@ -32,6 +32,9 @@ class Entry {
             new PickSpec(),
             // Resolving properties
             new resolver.ClassPropertySpec(),
+            new resolver.ClassStaticPropertySpec(),
+            new resolver.AbsInstancePropertySpec(),
+            new resolver.AbsStaticPropertySpec(),
         ])).handle( Runner.exit );
     }
 

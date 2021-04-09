@@ -194,7 +194,30 @@ class Resolver {
             }
 
         } else if (isResolve && !isMethod) {
-            result = SearchProperty(rawOutput, input.reduce(), false, expr, fieldEReg, metaEReg);
+            var _type = input.reduce();
+            var isStatic = false;
+
+            switch _type {
+                case TAnonymous(_.get() => {status:AClassStatics(ref)}):
+                    _type = TInst(ref, []);
+                    isStatic = true;
+
+                case TAnonymous(_.get() => {status:AClassStatics((clsr = _.get() =>  {kind:KAbstractImpl(absr)})) }):
+                    _type = TInst(clsr, []);
+                    isStatic = true;
+
+                case TAbstract(_.get() => abs, params):
+                    if (abs.impl != null) {
+                        _type = TInst(abs.impl, params);
+                        isStatic = true;
+
+                    }
+                
+                case _:
+
+            }
+
+            result = SearchProperty(rawOutput, _type, isStatic, expr, fieldEReg, metaEReg);
 
         } else {
             // var _:$output = coerce($expr:$input);
@@ -513,6 +536,9 @@ class Resolver {
         }
 
         var fields = switch module {
+            //case TAbstract(_.get() => abs, params):
+
+
             case TInst(_.get() => cls, params):
                 if (statics) {
                     cls.statics.get();
@@ -822,7 +848,6 @@ class Resolver {
             case SearchProperty(signature, module, statics, e, fieldEReg, metaEReg):
                 switch Resolver.findProperty(signature, module, statics, e.pos, fieldEReg, metaEReg) {
                     case Success(matches):
-                        trace( matches );
                         if (matches.length == 1) {
                             result = e.field( matches[0].name );
 
