@@ -505,7 +505,6 @@ class Resolver {
 
     public static function findProperty(signature:Type, module:Type, statics:Bool, pos:Position, ?fieldEReg:EReg, ?metaEReg:EReg, ?debug:Bool):Outcome<Array<{name:String, type:Type, meta:Metadata}>, Error> {
         if (debug == null) debug = Debug && CoerceVerbose;
-        var results = [];
         var blankField = fieldEReg == null || '$fieldEReg'.startsWith('~//');
         var blankMeta = metaEReg == null || '$metaEReg'.startsWith('~//');
         
