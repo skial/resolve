@@ -7,7 +7,7 @@ class Entry {
 
     public static function main() {
         Runner.run(TestBatch.make([
-            new coerce.IntString(),
+            /*new coerce.IntString(),
             new coerce.FloatString(),
             new coerce.StringBool(),
             new coerce.StringInt(),
@@ -29,7 +29,8 @@ class Entry {
             new resolver.AbsInstanceMatchStatic(),
             new CoerceSpec(),
             new ResolveSpec(),
-            new PickSpec(),
+            new PickSpec(),*/
+            new resolver.ClassPropertySpec(),
         ])).handle( Runner.exit );
     }
 

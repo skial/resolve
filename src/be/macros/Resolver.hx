@@ -97,7 +97,7 @@ class Resolver {
         }
 
         switch output {
-            case TAbstract(_.get() => {name:'Resolve'}, params): 
+            case TAbstract(_.get() => {name:_.startsWith('Resolve') => true}, params): 
                 isResolve = true;
                 // Correct the `rawOutput` type.
                 rawOutput = params[0];
@@ -138,7 +138,7 @@ class Resolver {
             trace( 'meta ereg       :   ' + metaEReg );
         }
 
-        if (isMethod) {
+        if (isResolve && isMethod) {
             switch input.reduce() {
                 // var _:Resolve<$rawOutput, EReg, EReg> = Abstract;
                 case TAnonymous(_.get() => {status:AClassStatics((clsr = _.get() =>  {kind:KAbstractImpl(absr)})) }):
@@ -192,6 +192,9 @@ class Resolver {
                     throw x;
 
             }
+
+        } else if (isResolve && !isMethod) {
+            result = SearchProperty(rawOutput, input.reduce(), false, expr, fieldEReg, metaEReg);
 
         } else {
             // var _:$output = coerce($expr:$input);
@@ -498,6 +501,50 @@ class Resolver {
         return Success(results);
     }
 
+    public static function findProperty(signature:Type, module:Type, statics:Bool, pos:Position, ?fieldEReg:EReg, ?metaEReg:EReg, ?debug:Bool):Outcome<Array<{name:String, type:Type, meta:Metadata}>, Error> {
+        if (debug == null) debug = Debug && CoerceVerbose;
+        var results = [];
+        var blankField = fieldEReg == null || '$fieldEReg'.startsWith('~//');
+        var blankMeta = metaEReg == null || '$metaEReg'.startsWith('~//');
+        
+        if (debug) {
+            trace( 'module  :   ' + module.getID() );
+        }
+
+        var fields = switch module {
+            case TInst(_.get() => cls, params):
+                if (statics) {
+                    cls.statics.get();
+
+                } else {
+                    cls.fields.get();
+
+                }
+
+            case x:
+                if (debug) trace( x );
+                [];
+
+        }
+
+        fields = fields
+        .filter( field -> switch field.kind {
+            case FVar(_, _): true;
+            case _: false;
+        } )
+        .filter( field -> {
+            if (debug) {
+                trace( field.name );
+            }
+            var typeMatch = field.type.unify(signature);
+            var nameMatch = !blankField ? fieldEReg.match( field.name ) : blankField;
+            var metaMatch = !blankMeta ? field.meta.get().filter( m -> metaEReg.match( printer.printMetadata(m) )).length > 0 : blankMeta;
+            return typeMatch && nameMatch && metaMatch;
+        } );
+
+        return Success(fields.map( f -> {name:f.name, meta:f.meta.get(), type:f.type }));
+    }
+
     public static function convertValue(input:Type, output:Type, value:Expr, ?debug:Bool):Outcome<Expr, Error> {
         if (debug == null) debug = Debug && CoerceVerbose;
         var inputID = input.getID();
@@ -655,6 +702,9 @@ class Resolver {
                     case Multiple(tasks):
                         Context.fatalError( NoNesting, pos );
 
+                    case SearchProperty(signture, module, statics, expr, ereg, meta):
+                        Context.fatalError( 'Searching multiple properties is not supported yet.', pos );
+
                     case SearchMethod(signature, module, statics, e, fieldEReg, metaEReg):
                         if (debug) trace( 'multi task  :   search methods' );
                         switch Resolver.findMethod(signature, module, statics, e.pos, fieldEReg, metaEReg) {
@@ -767,7 +817,49 @@ class Resolver {
                         
                 };
 
-            case SearchMethod(signature, module, statics, e, fieldEReg, metaEReg): 
+            case SearchProperty(signature, module, statics, e, fieldEReg, metaEReg):
+                switch Resolver.findProperty(signature, module, statics, e.pos, fieldEReg, metaEReg) {
+                    case Success(matches):
+                        trace( matches );
+                        if (matches.length == 1) {
+                            result = e.field( matches[0].name );
+
+                        } else if (matches.length > 1) {
+                            while (matches.length > 0) {
+                                var field = matches.pop();
+
+                                if (debug) {
+                                    trace( '--checking...--' );
+                                    trace( 'field name      :   ' + field.name );
+                                    trace( 'normal type     :   ' + field.type );
+                                    trace( 'reduced type    :   ' + field.type.follow() );
+                                    trace( 'signature       :   ' + signature );
+                                }
+
+                                if (field.type.follow().unify(signature)) {
+                                    result = e.field( field.name );
+                                    break;
+
+                                } else {
+                                    if (debug) {
+                                        trace( 'Field `' + field.name + '` type ' + field.type + ' failed to match against ' + signature );
+                                    }
+
+                                }
+
+                            }
+
+                        } else {
+                            Context.fatalError( NoMatches, e.pos );
+
+                        }
+
+                    case Failure(error):
+                        Context.fatalError( error.message, error.pos );
+
+                }
+
+            case SearchMethod(signature, module, statics, e, fieldEReg, metaEReg):
                 switch Resolver.findMethod(signature, module, statics, e.pos, fieldEReg, metaEReg) {
                     case Success(matches):
                         if (matches.length == 1) {
