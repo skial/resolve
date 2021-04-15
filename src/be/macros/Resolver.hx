@@ -35,6 +35,55 @@ enum abstract LocalMetas(Metas) to String {
     public var ResolverBind = ':resolver.self.bind';
 }
 
+@:structInit
+class TypeParamSet {
+
+    public var concreteTypes:Array<Type>;
+    public var typeParameters:Array<TypeParameter>;
+
+    public inline function new(concreteTypes:Array<Type>, typeParameters:Array<TypeParameter>) {
+        this.concreteTypes = concreteTypes;
+        this.typeParameters = typeParameters;
+    }
+
+}
+
+@:structInit
+@:using(be.macros.Resolver.TypeParamInfoUsings)
+class TypeParamInfo extends TypeParamSet {
+    public var constraints:Array<Array<Type>>;
+
+    public inline function new(concreteTypes:Array<Type>, constraints:Array<Array<Type>>, typeParameters:Array<TypeParameter>) {
+        this.constraints = constraints;
+        super(concreteTypes, typeParameters);
+    }
+
+}
+
+class TypeParamInfoUsings {
+
+    public static function reduce(info:TypeParamInfo):TypeParamSet {
+        var set:TypeParamSet = { concreteTypes: info.concreteTypes.copy(), typeParameters: info.typeParameters.copy() };
+
+        for (index in 0...info.typeParameters.length) {
+            var param = info.typeParameters[index];
+            var type = info.concreteTypes[index];
+            var candidates = info.constraints[index];
+
+            if (candidates != null && candidates.length > 0) {
+                type = candidates[0];
+
+            }
+
+            set.concreteTypes[index] = type;
+
+        }
+
+        return set;
+    }
+
+}
+
 class Resolver {
 
     private static final printer = new haxe.macro.Printer();
@@ -68,6 +117,96 @@ class Resolver {
         //'Array' => new Map()
     ];
 
+    // TODO this currently only supports a single param.
+    private static var typeParamEReg:EReg = ~/^(?:[a-z][a-zA-Z0-9]*\.?)*(?:[A-Z][a-zA-Z0-9]*)(?:<[a-zA-Z0-9<> ]*: ?((?:[A-Z][a-zA-Z0-9]*)+)>)$/gm;
+    private static var typeParamEREG:EReg = ~/^(?:[a-zA-Z0-9<> ]*: ?((?:[A-Z][a-zA-Z0-9]*)+))$/gm;
+
+    public static function isTypeParameter(type:Type):Bool {
+        return switch type {
+            case TInst(_.get() => {kind:KTypeParameter(_)}, params): true;
+            case _: false;
+        }
+    }
+
+    public static function getTypeParameters(type:Type, debug:Bool = false):Null<TypeParamInfo> {
+        var constraints:Array<Array<Type>> = [];
+        var concreteTypes:Array<Type> = [];
+        var typeParameters:Array<TypeParameter> = [];
+
+        switch type {
+            case TType(_.get() => def, params):
+                concreteTypes = params;
+                typeParameters = def.params;
+                /*trace( def );
+                trace( def.params );
+                trace( params );
+                trace( params.map( p -> getTypeParameters(p) ) );
+                trace( params.map( p -> p.toString() ) );*/
+
+            case TInst(_.get() => cls, params):
+                concreteTypes = params;
+                typeParameters = cls.params;
+
+            case TAbstract(_.get() => abs, params):
+                concreteTypes = params;
+                typeParameters = abs.params;
+
+            case TEnum(_.get() => enm, params):
+                concreteTypes = params;
+                typeParameters = enm.params;
+
+            case x:
+                if (debug) trace( x );
+        }
+
+        for (index in 0...typeParameters.length) {
+            var typeParam = typeParameters[index];
+            var passedParam = concreteTypes[index];
+
+            switch [typeParam.t, passedParam] {
+                /**
+                    A monomorph at this point that is null, is useless, especially when
+                    the compiler knows what it might be, but doesnt tell us. See next comment.
+                **/
+                case [TInst(_.get() => cls = {kind:KTypeParameter(c)}, params), TMono(_.get() => t)]:
+                    if (debug) trace( params.map( p -> p.toString() ));
+
+                    /**
+                        Outputs something along the lines of `Unknown<0> : Float`,
+                        BUT! digging into the `type`, the type constraint `Float`, afaik, is
+                        nowhere to be found, thru the public api at least.
+                    **/
+                    if (t == null) {
+                        var stringy = passedParam.toString();
+
+                        if (typeParamEREG.match( stringy )) {
+                            var typeId = typeParamEREG.matched(1);
+
+                            try {
+                                c.push( Context.getType(typeId) );
+
+                            } catch(e) {
+                                trace( e );
+
+                            }
+
+                        }
+
+                    }
+
+                    constraints.push( c );
+
+                case [a, b]:
+                    if (debug) trace( a, b );
+                    constraints.push( [b] );
+
+            }
+
+        }
+
+        return { typeParameters:typeParameters, concreteTypes:concreteTypes, constraints:constraints };
+    }
+
     public static function determineTask(expr:Expr, input:Type, output:Type, ?debug:Bool):ResolveTask {
         if (debug == null) debug = Debug && CoerceVerbose;
         var result:ResolveTask = null;
@@ -87,17 +226,33 @@ class Resolver {
         var fieldEReg = ~//i;
         var metaEReg = ~//i;
 
+        var typeInfo = getTypeParameters( output, debug );
+        var reduced = typeInfo.reduce();
+
         // Check if its a redefined type first.
+        // typedef Name = Resolve<T, ~/field/, ~/@:meta/>;
         switch output {
             case TType(_.get() => def, _):
+                if (debug) {
+                    trace( 'was      :   ' + output.toString() );
+
+                }
+
                 output = def.type;
+
+                if (debug) {
+                    trace( 'now      :   ' + output.toString() );
+
+                }
 
             case _:
 
         }
 
-        switch output {
-            case TAbstract(_.get() => {name:_.startsWith('Resolve') => true}, params): 
+        var sealedType = output.applyTypeParameters( reduced.typeParameters, reduced.concreteTypes);
+
+        switch sealedType {
+            case TAbstract(_.get() => abs = {name:_.startsWith('Resolve') => true}, params): 
                 isResolve = true;
                 // Correct the `rawOutput` type.
                 rawOutput = params[0];
@@ -129,9 +284,11 @@ class Resolver {
         if (debug) {
             trace( 'expression      :   ' + expr.toString() );
             trace( 'input type      :   ' + input );
-            trace( 'input reduced   :   ' + input.reduce() );
+            trace( '⨽ reduced       :   ' + input.reduce() );
+            trace( '⨽ type param?   :   ' + isTypeParameter(input.reduce()) );
             trace( 'output type     :   ' + output );
-            trace( 'output reduced  :   ' + rawOutput );
+            trace( '⨽ reduced       :   ' + rawOutput );
+            trace( '⨽ type param?   :   ' + isTypeParameter(rawOutput) );
             trace( 'function?       :   ' + isMethod );
             trace( 'resolve?        :   ' + isResolve );
             trace( 'field ereg      :   ' + fieldEReg );
@@ -196,16 +353,6 @@ class Resolver {
         } else if (isResolve && !isMethod) {
             var _type = input.reduce();
             var isStatic = false;
-
-            // TODO implement type parameter handling
-            // rawoutput can have `path.to.Type.T` as an TInst, check `cls.kind`.
-            switch rawOutput {
-                case TInst(_.get() => cls, params):
-                    trace( cls.kind );
-
-                case x:
-                    trace( x );
-            }
 
             switch _type {
                 case TAnonymous(_.get() => /*anon = */{status:AClassStatics(ref)}):
@@ -562,36 +709,94 @@ class Resolver {
 
         }
 
-        fields = fields
-        .filter( field -> {
-            if (field.kind.match( FMethod(_) )) return false;
+        var aTypeParameter = false;
+        var isConstrained = false;
+        var constraints = [];
+        var parameters = [];
+        switch signature {
+            case TInst(_.get() => cls = { kind:KTypeParameter(c)}, params):
+                trace( c );
+                trace( params );
+                trace( cls.params );
+                aTypeParameter = true;
+                isConstrained = c.length > 0;
+                constraints = c;
+                parameters = params;
 
-            if (debug) {
-                trace( '<filtering properties>' );
-                trace( 'field name  :   ' + field.name );
-                trace( 'signature   :   ' + signature.toString() );
-                trace( 'field type  :   ' + field.type.toString() );
-            }
+            case x if (debug):
+                trace( x );
 
-            if (field.type.unify(signature)) {
-                if (debug) trace( 'type match   :   true' );
-                return true;
-            }
-            
-            if (!blankField && fieldEReg.match( field.name )) {
-                if (debug) trace( 'field match   :   true' );
-                return true;
-            }
+        }
 
-            if (!blankMeta && field.meta.get().filter( m -> metaEReg.match( printer.printMetadata(m) )).length > 0) {
-                if (debug) trace( 'meta match   :   true' );
-                return true;
-            }
+        if (debug) {
+            trace( signature.toString(), aTypeParameter, isConstrained, constraints, parameters );
+        }
 
-            return false;
+        var _pairs:Array<Pair<ClassField, Int>> = [
+            for (field in fields) {
+                if (!field.kind.match( FMethod(_) )) {
+                    var weight = filterFields(field, signature, aTypeParameter, isConstrained, constraints, parameters, fieldEReg, metaEReg, debug);
+                    if (weight > 0) {
+                        new Pair(field, weight);
+    
+                    }
+    
+                }
+            }
+        ];
+
+        haxe.ds.ArraySort.sort( _pairs, function(a, b) {
+            var wA = a.b;
+            var wB = b.b;
+            return wA - wB;
         } );
 
-        return Success(fields.map( f -> {name:f.name, meta:f.meta.get(), type:f.type }));
+        return Success(_pairs.map( p -> { name:p.a.name, meta:p.a.meta.get(), type:p.a.type }));
+    }
+
+    /**
+        TODO: handle constraints.
+        If an integer is returned, the value is the weight, based on the factors that matched.
+    **/
+    private static function filterFields(field:ClassField, signature:Type, aTypeParam:Bool = false, isConstrained:Bool = false, ?constraints:Array<Type>, ?params:Array<Type>, ?fieldEReg:EReg, ?metaEReg:EReg, debug:Bool = false):Int {
+        var weight = 0;
+        var ftype = field.type.followWithAbstracts();
+
+        if (debug) {
+            trace( '<filtering properties>' );
+            trace( 'field name      :   ' + field.name );
+            trace( '⨽ type          :   ' + ftype.toString() );
+            trace( '<matching against ...>' );
+            trace( 'signature       :   ' + signature.toString() );
+            trace( '⨽ type param?   :   ' + isTypeParameter(signature) );
+        }
+
+        /**
+            Unifying against a type is preferred, but against
+            an un-constrained type parameter is not, as an open type 
+            can match almost anything, delay the check to end instead.
+        **/
+        if (!aTypeParam && ftype.unify(signature)) {
+            if (debug) trace( 'type match      :   true' );
+            weight++;
+        }
+        
+        if (fieldEReg != null && fieldEReg.match( field.name )) {
+            if (debug) trace( 'field match     :   true' );
+            weight++;
+        }
+
+        if (metaEReg != null && field.meta.get().filter( m -> metaEReg.match( printer.printMetadata(m) )).length > 0) {
+            if (debug) trace( 'meta match      :   true' );
+            weight++;
+        }
+
+        if (aTypeParam) {
+            if (debug) trace( 'param match     :   true' );
+            weight++;
+        }
+
+        return weight;
     }
 
     public static function convertValue(input:Type, output:Type, value:Expr, ?debug:Bool):Outcome<Expr, Error> {
@@ -892,6 +1097,7 @@ class Resolver {
                                     if (debug) {
                                         trace( 'Field `' + field.name + '` type ' + field.type + ' failed to match against ' + signature );
                                     }
+                                    result = e.field( field.name );
 
                                 }
 

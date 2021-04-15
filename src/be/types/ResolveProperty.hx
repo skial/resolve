@@ -13,7 +13,6 @@ using StringTools;
 @:notNull abstract ResolveProperty<T, @:const R:EReg, @:const M:EReg>(T) to T {
 
     @:noCompletion public inline function get():T return this;
-    @:from private static inline function fromAny<T>(v:T):ResolveProperty<T, ~//i, ~//i> return (cast v:ResolveProperty<T, ~//i, ~//i>);
 
     public static macro function resolve<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
         if (Debug && CoerceVerbose) {
@@ -22,7 +21,7 @@ using StringTools;
         }
         
         var task = Resolver.determineTask( expr, expr.typeof().sure(), Context.getExpectedType() );
-        var result:Expr = Resolver.handleTask(task);
+        var result:Expr = macro @:pos(expr.pos) @:privateAccess be.types.ResolveProperty.fromAny($e{Resolver.handleTask(task)});
 
         if (Debug && CoerceVerbose) {
             trace( result.toString() );
@@ -38,7 +37,7 @@ using StringTools;
         }
         
         var task = Resolver.determineTask( expr, expr.typeof().sure(), Context.getExpectedType() );
-        var result:Expr = Resolver.handleTask(task);
+        var result:Expr = macro @:pos(expr.pos) @:privateAccess be.types.ResolveProperty.fromAny($e{Resolver.handleTask(task)});
 
         if (Debug && CoerceVerbose) {
             trace( result.toString() );
@@ -46,5 +45,7 @@ using StringTools;
 
         return result;
     }
+
+    /*@:from*/ private static inline function fromAny<T>(v:T):ResolveProperty<T, ~//i, ~//i> return (cast v:ResolveProperty<T, ~//i, ~//i>);
 
 }
