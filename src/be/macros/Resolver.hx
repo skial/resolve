@@ -377,7 +377,7 @@ class Resolver {
 
         } else {
             // var _:$output = coerce($expr:$input);
-            result = ConvertValue(input, output, expr);
+            result = ConvertValue(input, rawOutput, expr);
 
         }
 
@@ -391,6 +391,7 @@ class Resolver {
                     trace(result);
 
             }
+
         }
 
         return result;
@@ -707,23 +708,10 @@ class Resolver {
 
         }
 
-        var info = getTypeParameters( signature );
-        if (debug) {
-            trace( info.constraints, info.typeParameters, info.concreteTypes );
-        }
-        var reduced = info.reduce();
-        var aTypeParameter = info.typeParameters.length > 0;
-        var isConstrained = info.constraints.length > 0;
-        /*var sealedType = signature.applyTypeParameters( reduced.typeParameters, reduced.concreteTypes );
-
-        if (debug) {
-            trace( sealedType.toString(), aTypeParameter, isConstrained );
-        }*/
-
         var _pairs:Array<Pair<ClassField, Int>> = [
             for (field in fields) {
                 if (!field.kind.match( FMethod(_) )) {
-                    var weight = filterFields(field, signature, /*aTypeParameter, isConstrained,*/ fieldEReg, metaEReg, debug);
+                    var weight = filterFields(field, signature, fieldEReg, metaEReg, debug);
                     if (weight > 0) {
                         new Pair(field, weight);
     
@@ -748,10 +736,9 @@ class Resolver {
     }
 
     /**
-        TODO: handle constraints.
         If an integer is returned, the value is the weight, based on the factors that matched.
     **/
-    private static function filterFields(field:ClassField, signature:Type, /*aTypeParam:Bool = false, isConstrained:Bool = false, */?fieldEReg:EReg, ?metaEReg:EReg, debug:Bool = false):Int {
+    private static function filterFields(field:ClassField, signature:Type, ?fieldEReg:EReg, ?metaEReg:EReg, debug:Bool = false):Int {
         var weight = 0;
         var ftype = field.type.followWithAbstracts();
 
@@ -764,12 +751,7 @@ class Resolver {
             trace( '⨽ type param?   :   ' + isTypeParameter(signature) );
         }
 
-        /**
-            Unifying against a type is preferred, but against
-            an un-constrained type parameter is not, as an open type 
-            can match almost anything, delay the check to end instead.
-        **/
-        if (/*!aTypeParam && */ftype.unify(signature)) {
+        if (ftype.unify(signature)) {
             if (debug) trace( 'type match      :   true' );
             weight++;
         }
@@ -783,11 +765,6 @@ class Resolver {
             if (debug) trace( 'meta match      :   true' );
             weight++;
         }
-
-        /*if (aTypeParam) {
-            if (debug) trace( 'param match     :   true' );
-            weight++;
-        }*/
 
         return weight;
     }
