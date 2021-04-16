@@ -21,7 +21,7 @@ using StringTools;
         }
         
         var task = Resolver.determineTask( expr, expr.typeof().sure(), Context.getExpectedType() );
-        var result:Expr = macro @:pos(expr.pos) @:privateAccess be.types.ResolveProperty.fromAny($e{Resolver.handleTask(task)});
+        var result:Expr = macro @:pos(expr.pos) be.types.ResolveProperty.fromAny($e{Resolver.handleTask(task)});
 
         if (Debug && CoerceVerbose) {
             trace( result.toString() );
@@ -35,9 +35,19 @@ using StringTools;
             trace( 'start: catchall property' );
             trace( expr.toString(), expr.pos );
         }
-        
-        var task = Resolver.determineTask( expr, expr.typeof().sure(), Context.getExpectedType() );
-        var result:Expr = macro @:pos(expr.pos) @:privateAccess be.types.ResolveProperty.fromAny($e{Resolver.handleTask(task)});
+
+        var type = expr.typeof().sure();
+
+        switch type {
+            case TAbstract(_.get() => {name:"ResolveProperty" }, _): 
+                return expr;
+
+            case x:
+                if (Debug && CoerceVerbose) trace( x );
+        }
+
+        var task = Resolver.determineTask( expr, type, Context.getExpectedType() );
+        var result:Expr = macro @:pos(expr.pos) be.types.ResolveProperty.fromAny($e{Resolver.handleTask(task)});
 
         if (Debug && CoerceVerbose) {
             trace( result.toString() );
@@ -46,6 +56,6 @@ using StringTools;
         return result;
     }
 
-    /*@:from*/ private static inline function fromAny<T>(v:T):ResolveProperty<T, ~//i, ~//i> return (cast v:ResolveProperty<T, ~//i, ~//i>);
+    /*@:from*/ @:noCompletion public static inline function fromAny<T>(v:T):ResolveProperty<T, ~//i, ~//i> return (cast v:ResolveProperty<T, ~//i, ~//i>);
 
 }

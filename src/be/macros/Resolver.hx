@@ -1,6 +1,5 @@
 package be.macros;
 
-import haxe.macro.*;
 import haxe.macro.Type;
 import haxe.macro.Expr;
 import haxe.macro.Metas;
@@ -117,9 +116,7 @@ class Resolver {
         //'Array' => new Map()
     ];
 
-    // TODO this currently only supports a single param.
-    private static var typeParamEReg:EReg = ~/^(?:[a-z][a-zA-Z0-9]*\.?)*(?:[A-Z][a-zA-Z0-9]*)(?:<[a-zA-Z0-9<> ]*: ?((?:[A-Z][a-zA-Z0-9]*)+)>)$/gm;
-    private static var typeParamEREG:EReg = ~/^(?:[a-zA-Z0-9<> ]*: ?((?:[A-Z][a-zA-Z0-9]*)+))$/gm;
+    private static final typeParamEReg:EReg = ~/^(?:[a-zA-Z0-9<> ]*: ?((?:[A-Z][a-zA-Z0-9]*)+))$/gm;
 
     public static function isTypeParameter(type:Type):Bool {
         return switch type {
@@ -179,8 +176,8 @@ class Resolver {
                     if (t == null) {
                         var stringy = passedParam.toString();
 
-                        if (typeParamEREG.match( stringy )) {
-                            var typeId = typeParamEREG.matched(1);
+                        if (typeParamEReg.match( stringy )) {
+                            var typeId = typeParamEReg.matched(1);
 
                             try {
                                 c.push( Context.getType(typeId) );
@@ -252,6 +249,7 @@ class Resolver {
         var sealedType = output.applyTypeParameters( reduced.typeParameters, reduced.concreteTypes);
 
         switch sealedType {
+            // Remember there are currently two types, both starting with "Resolve"
             case TAbstract(_.get() => abs = {name:_.startsWith('Resolve') => true}, params): 
                 isResolve = true;
                 // Correct the `rawOutput` type.
@@ -355,11 +353,11 @@ class Resolver {
             var isStatic = false;
 
             switch _type {
-                case TAnonymous(_.get() => /*anon = */{status:AClassStatics(ref)}):
+                case TAnonymous(_.get() => {status:AClassStatics(ref)}):
                     _type = TInst(ref, []);
                     isStatic = true;
 
-                case TAnonymous(_.get() => /*anon = */{status:AClassStatics((clsr = _.get() =>  {kind:KAbstractImpl(absr)})) }):
+                case TAnonymous(_.get() => {status:AClassStatics((clsr = _.get() =>  {kind:KAbstractImpl(absr)})) }):
                     _type = TInst(clsr, []);
                     isStatic = true;
 
@@ -709,33 +707,23 @@ class Resolver {
 
         }
 
-        var aTypeParameter = false;
-        var isConstrained = false;
-        var constraints = [];
-        var parameters = [];
-        switch signature {
-            case TInst(_.get() => cls = { kind:KTypeParameter(c)}, params):
-                trace( c );
-                trace( params );
-                trace( cls.params );
-                aTypeParameter = true;
-                isConstrained = c.length > 0;
-                constraints = c;
-                parameters = params;
-
-            case x if (debug):
-                trace( x );
-
+        var info = getTypeParameters( signature );
+        if (debug) {
+            trace( info.constraints, info.typeParameters, info.concreteTypes );
         }
+        var reduced = info.reduce();
+        var aTypeParameter = info.typeParameters.length > 0;
+        var isConstrained = info.constraints.length > 0;
+        /*var sealedType = signature.applyTypeParameters( reduced.typeParameters, reduced.concreteTypes );
 
         if (debug) {
-            trace( signature.toString(), aTypeParameter, isConstrained, constraints, parameters );
-        }
+            trace( sealedType.toString(), aTypeParameter, isConstrained );
+        }*/
 
         var _pairs:Array<Pair<ClassField, Int>> = [
             for (field in fields) {
                 if (!field.kind.match( FMethod(_) )) {
-                    var weight = filterFields(field, signature, aTypeParameter, isConstrained, constraints, parameters, fieldEReg, metaEReg, debug);
+                    var weight = filterFields(field, signature, /*aTypeParameter, isConstrained,*/ fieldEReg, metaEReg, debug);
                     if (weight > 0) {
                         new Pair(field, weight);
     
@@ -751,6 +739,11 @@ class Resolver {
             return wA - wB;
         } );
 
+        if (debug) {
+            trace( '<property weights ...>' );
+            for (pair in _pairs) trace( pair.a.name, pair.b );
+        }
+
         return Success(_pairs.map( p -> { name:p.a.name, meta:p.a.meta.get(), type:p.a.type }));
     }
 
@@ -758,7 +751,7 @@ class Resolver {
         TODO: handle constraints.
         If an integer is returned, the value is the weight, based on the factors that matched.
     **/
-    private static function filterFields(field:ClassField, signature:Type, aTypeParam:Bool = false, isConstrained:Bool = false, ?constraints:Array<Type>, ?params:Array<Type>, ?fieldEReg:EReg, ?metaEReg:EReg, debug:Bool = false):Int {
+    private static function filterFields(field:ClassField, signature:Type, /*aTypeParam:Bool = false, isConstrained:Bool = false, */?fieldEReg:EReg, ?metaEReg:EReg, debug:Bool = false):Int {
         var weight = 0;
         var ftype = field.type.followWithAbstracts();
 
@@ -776,7 +769,7 @@ class Resolver {
             an un-constrained type parameter is not, as an open type 
             can match almost anything, delay the check to end instead.
         **/
-        if (!aTypeParam && ftype.unify(signature)) {
+        if (/*!aTypeParam && */ftype.unify(signature)) {
             if (debug) trace( 'type match      :   true' );
             weight++;
         }
@@ -791,10 +784,10 @@ class Resolver {
             weight++;
         }
 
-        if (aTypeParam) {
+        /*if (aTypeParam) {
             if (debug) trace( 'param match     :   true' );
             weight++;
-        }
+        }*/
 
         return weight;
     }
@@ -1082,7 +1075,7 @@ class Resolver {
                                 var field = matches.pop();
 
                                 if (debug) {
-                                    trace( '--checking...--' );
+                                    trace( '<checking ...>' );
                                     trace( 'field name      :   ' + field.name );
                                     trace( 'normal type     :   ' + field.type );
                                     trace( 'reduced type    :   ' + field.type.follow() );
