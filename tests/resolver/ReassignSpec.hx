@@ -1,6 +1,9 @@
 package resolver;
 
 import be.types.Resolve;
+import be.types.Resolve.resolve;
+
+import tink.unit.AssertionBuffer;
 
 @:asserts
 class ReassignSpec {
@@ -8,7 +11,7 @@ class ReassignSpec {
     public function new() {}
 
     public function test() {
-        var r:Resolve<String->String, ~//, ~//> = Std;
+        var r:Resolve<String->String, ~//, ~//> = resolve(Std);
 
         asserts.assert( r('foo') == 'foo' );
 

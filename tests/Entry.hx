@@ -31,8 +31,8 @@ class Entry {
             new ResolveSpec(),
             new PickSpec(),
             // Resolving properties
-            new resolver.ClassPropertySpec(),             // TODO recent changes to `ResolveProperty.fromAny` or the new type parameter functions are the cause.
-            new resolver.ClassStaticPropertySpec(),       // TODO recent changes to `ResolveProperty.fromAny` or the new type parameter functions are the cause.
+            new resolver.ClassPropertySpec(),
+            new resolver.ClassStaticPropertySpec(),
             new resolver.AbsInstancePropertySpec(),
             new resolver.AbsStaticPropertySpec(),
             new resolver.GenericPropertySpec(),

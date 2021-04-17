@@ -6,18 +6,18 @@ typedef Left<T> = ResolveProperty<T, ~/left([a-z]*)/i, ~/@:left/i>;
 typedef Right<T> = ResolveProperty<T, ~//i, ~/@:right/i>;
 
 @:asserts
-// Lacks constraints to the type parameters.
 class GenericPropertySpec {
 
     public function new() {}
 
     public function testGenericResolve() {
         var a = new GenericPropertyHelper(55.5);
-        /*asserts.assert( singleLhs(a) == '55.5' );
+        asserts.assert( singleLhs(a) == '55.5' );
         /**
             As the only filter on `Right<T>` is a meta `@:right`, both
-            statics are found, but the first of the choices is used. In
-            this case, `defaultRightInt`.
+            statics in `GenericPropertyHelper` are matched. But the first field
+            to unify with the type parameter of `Right<T>`, LiFo order, so in 
+            this case `defaultRightInt` is selected.
         **/
         asserts.assert( singleRhs(GenericPropertyHelper) == '10' );
         asserts.assert( singleRhsHint(GenericPropertyHelper) == '0.1' );
@@ -46,8 +46,8 @@ class GenericPropertySpec {
 class GenericPropertyHelper {
 
     public var lefty:Float;
-    @:right public static var defaultRightInt:Int = 10;
     @:right public static var defaultRightFloat:Float = 0.1;
+    @:right public static var defaultRightInt:Int = 10;
 
     public function new(l:Float) {
         lefty = l;
