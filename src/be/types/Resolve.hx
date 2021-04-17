@@ -21,40 +21,6 @@ typedef ResolvedMethod<T:Function> = Resolve<T, ~//, ~//>;
     @:noCompletion @:from public static inline function fromFunction<T:Function>(v:T):Resolve<T, ~//i, ~//i> return (cast v:Resolve<T, ~//i, ~//i>);
     @:noCompletion public static inline function seal<T:Function>(v:T):ResolvedMethod<T> return (cast v:ResolvedMethod<T>);
 
-    public static macro function resolve<In, Out:Function>(expr:ExprOf<Class<In>>):ExprOf<Out> {
-        var debug = Debug && CoerceVerbose;
-        if (debug) {
-            trace( 'start: resolve' );
-            trace( expr.toString(), expr.pos );
-        }
-
-        var type = haxe.macro.Context.typeof(expr);
-
-        var wrap:Bool = false;
-        var expectedType = Context.getExpectedType();
-        var outputType = switch expectedType {
-            case TType(_.get() => { type: TAbstract(_.get() => {name:"Resolve"}, params)}, _) | TAbstract(_.get() => { name:"Resolve"}, params):
-                wrap = true;
-                params[0];
-
-            case x:
-                x;
-        }
-
-        var outputComplex:Null<ComplexType> = Context.toComplexType(outputType);
-        var task = Resolver.determineTask( expr, type, expectedType );
-        var result:Expr = Resolver.handleTask(task);
-
-        if (wrap && outputComplex != null) result = macro ($e{result}:$outputComplex);
-        result = macro @:pos(expr.pos) be.types.Resolve.seal( $result );
-
-        if (debug) {
-            trace( result.toString() );
-        }
-
-        return result;
-    }
-
     public static macro function coerce<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
         var debug = Debug && CoerceVerbose;
         if (debug) {
@@ -72,10 +38,10 @@ typedef ResolvedMethod<T:Function> = Resolve<T, ~//, ~//>;
         return result;
     }
 
-    @:noCompletion @:from public static macro function catchAll<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
+    @:noCompletion @:from public static macro function resolve<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
         var debug = Debug && CoerceVerbose;
         if (debug) {
-            trace( 'start: catch all' );
+            trace( 'start: resolve' );
             trace( expr.toString(), expr.pos );
         }
 
