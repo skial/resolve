@@ -118,13 +118,6 @@ class Resolver {
 
     private static final typeParamEReg:EReg = ~/^(?:[a-zA-Z0-9<> ]*: ?((?:[A-Z][a-zA-Z0-9]*)+))$/gm;
 
-    public static function isTypeParameter(type:Type):Bool {
-        return switch type {
-            case TInst(_.get() => {kind:KTypeParameter(_)}, params): true;
-            case _: false;
-        }
-    }
-
     public static function getTypeParameters(type:Type, debug:Bool = false):Null<TypeParamInfo> {
         var constraints:Array<Array<Type>> = [];
         var concreteTypes:Array<Type> = [];
@@ -134,11 +127,6 @@ class Resolver {
             case TType(_.get() => def, params):
                 concreteTypes = params;
                 typeParameters = def.params;
-                /*trace( def );
-                trace( def.params );
-                trace( params );
-                trace( params.map( p -> getTypeParameters(p) ) );
-                trace( params.map( p -> p.toString() ) );*/
 
             case TInst(_.get() => cls, params):
                 concreteTypes = params;
@@ -183,7 +171,7 @@ class Resolver {
                                 c.push( Context.getType(typeId) );
 
                             } catch(e) {
-                                trace( e );
+                                if (debug) trace( e );
 
                             }
 
@@ -291,10 +279,8 @@ class Resolver {
             trace( 'expression      :   ' + expr.toString() );
             trace( 'input type      :   ' + input );
             trace( '⨽ reduced       :   ' + input.reduce() );
-            trace( '⨽ type param?   :   ' + isTypeParameter(input.reduce()) );
             trace( 'output type     :   ' + output );
             trace( '⨽ reduced       :   ' + rawOutput );
-            trace( '⨽ type param?   :   ' + isTypeParameter(rawOutput) );
             trace( 'function?       :   ' + isMethod );
             trace( 'resolve?        :   ' + isResolve );
             trace( 'field ereg      :   ' + fieldEReg );
@@ -428,7 +414,6 @@ class Resolver {
                     trace( 'return type :   ' + ret );
                 }
 
-                //var fields:Array<{name:String, type:Type, meta:Metadata}> = switch module {
                 var fields:Array<ClassField> = switch module {
                     // The class which is auto generated for abstracts.
                     case TInst(clsr = _.get() => cls = {kind:KAbstractImpl(absr)}, params):
@@ -476,20 +461,8 @@ class Resolver {
                                         **/
                                         if (args.length > 1 && args[0].t.followWithAbstracts().unify(raw)) {
                                             field.meta.add( ResolverBind, [macro $v{args.length-1}], field.pos );
-                                            /*fs.push( {
-                                                name: field.name,
-                                                type: TFun(args.slice(1), ret),
-                                                meta: field.meta/*.get()*//*,
-                                            } );*/
-                                            /*var _field = Reflect.copy(field);
-                                            _field.type = TFun(args.slice(1), ret);*/
-                                            var _field:ClassField = { 
-                                                name:field.name, type:TFun(args.slice(1), ret),
-                                                isPublic:field.isPublic, isExtern:field.isExtern, isFinal:field.isFinal,
-                                                isAbstract:field.isAbstract, params:field.params, meta:field.meta,
-                                                kind:field.kind, expr:field.expr, pos:field.pos, doc:field.doc,
-                                                overloads:field.overloads
-                                            }
+                                            var _field = Reflect.copy(field);
+                                            _field.type = TFun(args.slice(1), ret);
                                             fs.push( _field );
 
                                         } else {
@@ -507,7 +480,6 @@ class Resolver {
                         } else {
                             // See `@:impl` commment above.
                             for (field in sfields) if (field.kind.match( FMethod(_) ))/*if (!field.meta.has(Metas.Impl))*/ {
-                                //fs.push( {name:field.name, type:field.type, meta:field.meta.get()} );
                                 fs.push( field );
                             }
 
@@ -518,9 +490,7 @@ class Resolver {
                     case TInst(_.get() => cls, params):
                         if (debug) trace( 'Class' );
                         var fs:Array<ClassField> = statics ? cls.statics.get() : cls.fields.get();
-                        fs
-                            .filter( f -> f.kind.match( FMethod(_) ))
-                            ;//.map( f -> {name:f.name, type:f.type, meta:f.meta.get()} );
+                        fs.filter( f -> f.kind.match( FMethod(_) ));
 
                     case TAbstract(_.get() => abs, params) if (metaEReg != null):
                         if (debug) {
@@ -537,7 +507,6 @@ class Resolver {
                             **/
                             if (metaEReg.match('@' + Metas.From)) {
                                 for (f in abs.from) if (f.field != null) {
-                                    //fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
                                     fs.push( f.field );
     
                                 }
@@ -560,7 +529,6 @@ class Resolver {
 
                                     for (f in abs.binops) if (f.field != null) {
                                         if (debug) trace( 'Adding @:op overload `$b` method ${f.field.name}' );
-                                        //fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
                                         fs.push( f.field );
                                     }
 
@@ -573,7 +541,6 @@ class Resolver {
                             var unop = ['++', '--', '!', '-', '~'];
                             for (u in unop) if (metaEReg.match(op + '(${u}A)')) {
                                 for (f in abs.unops) if (f.field != null) {
-                                    //fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
                                     fs.push( f.field );
                                 }
 
@@ -584,7 +551,6 @@ class Resolver {
                             // Check postfix.
                             for (u in ['++', '--']) if (metaEReg.match(op + '(A$u)')) {
                                 for (f in abs.unops) if (f.field != null) {
-                                    //fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
                                     fs.push( f.field );
                                 }
                                 break;
@@ -592,14 +558,11 @@ class Resolver {
     
                             // Check array access
                             if (metaEReg.match(op + '([])') || metaEReg.match('@' + Metas.ArrayAccess)) for (f in abs.array) {
-                                //fs.push( {name:f.name, type:f.type, meta:f.meta.get()} );
                                 fs.push( f );
                             }
 
                             // Check resolve
                             if (metaEReg.match(op + '(a.b)') || metaEReg.match('@' + Metas.Resolve)){
-                                //if (abs.resolve != null) fs.push( {name:abs.resolve.name, type:abs.resolve.type, meta:abs.resolve.meta.get()} );
-                                //if (abs.resolveWrite != null) fs.push( {name:abs.resolveWrite.name, type:abs.resolveWrite.type, meta:abs.resolveWrite.meta.get()} );
                                 if (abs.resolve != null) fs.push( abs.resolve );
                                 if (abs.resolveWrite != null) fs.push( abs.resolveWrite );
                             }
@@ -607,7 +570,6 @@ class Resolver {
                         } else {
                             // Check @:to implicit casts
                             if (metaEReg.match('@' + Metas.To)) for (f in abs.to) {
-                                //fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
                                 fs.push( f.field );
                             }
 
@@ -624,7 +586,6 @@ class Resolver {
 
                 }
 
-                #if !oldMethodSort
                 var _pairs:Array<Pair<ClassField, Int>> = [
                     for (field in fields) {
                         if (field.name != '') {
@@ -638,13 +599,11 @@ class Resolver {
                         }
                     }
                 ];
-                #end
 
                 if (debug) {
                     trace( 'checking    :   ' + fields.map( f->f.name ) );
                 }
 
-                #if !oldMethodSort
                 haxe.ds.ArraySort.sort( _pairs, function(a, b) {
                     var wA = a.b;
                     var wB = b.b;
@@ -654,88 +613,8 @@ class Resolver {
                 if (debug) {
                     trace( 'sorted      :   ' + _pairs.map( p -> p.a.name ) );
                 }
-                #end
 
-                #if oldMethodSort
-                haxe.ds.ArraySort.sort( fields, (f1, f2) -> {
-                    var fieldMatch = blankField;
-                    var metaMatch = blankMeta;
-                    
-                    var f1total = 0;
-                    var f2total = 0;
-
-                    /**
-                        Check the equality of types signatures, which is preferred over unifying types.
-                        Type to String equality is gonna bite me in the ass.
-                    **/
-                    switch ([signature, f1.type, f2.type]) {
-                        case [TFun(args, ret), TFun(args1, ret1), TFun(args2, ret2)]:
-                            var idents = args.map( a -> a.t.toString() );
-                            var retIdent = ret.toString();
-
-                            if (args.length == args1.length && retIdent == ret1.toString()) {
-                                for (i in 0...args1.length) if (idents[i] == args1[i].t.toString()) {
-                                    f1total++;
-                                }
-
-                            }
-
-                            if (args.length == args2.length && retIdent == ret2.toString()) {
-                                for (i in 0...args2.length) if (idents[i] == args2[i].t.toString()) {
-                                    f2total++;
-                                }
-                                
-                            }
-                            trace(f1.name, f2.name);
-                            if (f1.type.unify(signature)) f1total++;
-                            if (f2.type.unify(signature)) f2total++;
-
-                        case [a, b, c]:
-                            trace( a, b, c );
-
-                    }
-
-                    if (!fieldMatch) {
-                        switch [fieldEReg.match(f1.name), fieldEReg.match(f2.name)] {
-                            case [true, false]: f1total++;
-                            case [false, true]: f2total++;
-                            case _:
-                        }
-
-                    }
-
-                    if (!metaMatch) {
-                        for (meta in f1.meta.get()) {
-                            var str = printer.printMetadata(meta);
-                            if (debug) trace(str);
-                            if (metaEReg.match( str )) f1total++;
-                        }
-
-                        for (meta in f2.meta.get()) {
-                            var str = printer.printMetadata(meta);
-                            if (debug) trace(str);
-                            if (metaEReg.match( str )) f2total++;
-                        }
-
-                    }
-
-                    if (debug) {
-                        trace( f1.name, f2.name, f1total, f2total, f1total - f2total );
-                    }
-
-                    return f1total - f2total;
-                } );
-
-                if (debug) {
-                    trace( 'sorted      :   ' + fields.map( f->f.name ) );
-                }
-                #end
-
-                #if oldMethodSort
-                results = fields.map( f -> { name:f.name, type:f.type, meta:f.meta.get() } );
-                #else
                 results = _pairs.map( p -> { name:p.a.name, type:p.a.type, meta:p.a.meta.get() } );
-                #end
 
             case x:
                 return Failure(new Error( NotFound, NotFunction + ' Not ${x.getID()}', pos ));
@@ -812,7 +691,6 @@ class Resolver {
             trace( '⨽ type          :   ' + ftype.toString() );
             trace( '<matching against ...>' );
             trace( 'signature       :   ' + signature.toString() );
-            trace( '⨽ type param?   :   ' + isTypeParameter(signature) );
             trace( '<comparison ...>' );
             trace( 'equality        :   ' + ftype.compare( signature ) );
             trace( '<checks ...>' );
@@ -894,6 +772,7 @@ class Resolver {
         var pos = value.pos;
 
         if (debug) {
+            trace( '<convert value ...>' );
             trace( 'input       :   ' + input );
             trace( 'output      :   ' + output );
             trace( 'value       :   ' + value.toString() );
