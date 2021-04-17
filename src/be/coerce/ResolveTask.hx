@@ -5,6 +5,13 @@ import haxe.macro.Type;
 
 enum ResolveTask {
     /**
+        var m:Resolve<String, ~//, ~//> = resolve(Type);
+        var m:Resolve<`signature`, `ereg`, `meta`> = `expr = `resolve(`module`); // statics=true
+        var m:Resolve<String, ~//, ~//> = resolve(expr);
+        var m:Resolve<`signature`, `ereg`, `meta`> = `expr = `resolve((expr:`module`)); // `statics=false
+    **/
+    SearchProperty(signture:Type, module:Type, statics:Bool, expr:Expr, ?ereg:EReg, ?meta:EReg);
+    /**
         var m:String->Float = resolve(Type);
         var m:`signature` = resolve(`module`);
         var m:Resolve<String->Float, ~/int/i> = resolve(Type);

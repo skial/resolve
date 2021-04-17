@@ -1,6 +1,5 @@
 package be.macros;
 
-import haxe.macro.*;
 import haxe.macro.Type;
 import haxe.macro.Expr;
 import haxe.macro.Metas;
@@ -33,6 +32,55 @@ enum abstract LocalDefines(Defines) {
 @:forwardStatics
 enum abstract LocalMetas(Metas) to String {
     public var ResolverBind = ':resolver.self.bind';
+}
+
+@:structInit
+class TypeParamSet {
+
+    public var concreteTypes:Array<Type>;
+    public var typeParameters:Array<TypeParameter>;
+
+    public inline function new(concreteTypes:Array<Type>, typeParameters:Array<TypeParameter>) {
+        this.concreteTypes = concreteTypes;
+        this.typeParameters = typeParameters;
+    }
+
+}
+
+@:structInit
+@:using(be.macros.Resolver.TypeParamInfoUsings)
+class TypeParamInfo extends TypeParamSet {
+    public var constraints:Array<Array<Type>>;
+
+    public inline function new(concreteTypes:Array<Type>, constraints:Array<Array<Type>>, typeParameters:Array<TypeParameter>) {
+        this.constraints = constraints;
+        super(concreteTypes, typeParameters);
+    }
+
+}
+
+class TypeParamInfoUsings {
+
+    public static function reduce(info:TypeParamInfo):TypeParamSet {
+        var set:TypeParamSet = { concreteTypes: info.concreteTypes.copy(), typeParameters: info.typeParameters.copy() };
+
+        for (index in 0...info.typeParameters.length) {
+            var param = info.typeParameters[index];
+            var type = info.concreteTypes[index];
+            var candidates = info.constraints[index];
+
+            if (candidates != null && candidates.length > 0) {
+                type = candidates[0];
+
+            }
+
+            set.concreteTypes[index] = type;
+
+        }
+
+        return set;
+    }
+
 }
 
 class Resolver {
@@ -68,6 +116,89 @@ class Resolver {
         //'Array' => new Map()
     ];
 
+    private static final typeParamEReg:EReg = ~/^(?:[a-zA-Z0-9<> ]*: ?((?:[A-Z][a-zA-Z0-9]*)+))$/gm;
+
+    public static function getTypeParameters(type:Type, debug:Bool = false):Null<TypeParamInfo> {
+        var constraints:Array<Array<Type>> = [];
+        var concreteTypes:Array<Type> = [];
+        var typeParameters:Array<TypeParameter> = [];
+
+        switch type {
+            case TType(_.get() => def, params):
+                concreteTypes = params;
+                typeParameters = def.params;
+
+            case TInst(_.get() => cls, params):
+                concreteTypes = params;
+                typeParameters = cls.params;
+
+            case TAbstract(_.get() => abs, params):
+                concreteTypes = params;
+                typeParameters = abs.params;
+
+            case TEnum(_.get() => enm, params):
+                concreteTypes = params;
+                typeParameters = enm.params;
+
+            case x:
+                if (debug) trace( x );
+        }
+
+        for (index in 0...typeParameters.length) {
+            var typeParam = typeParameters[index];
+            var passedParam = concreteTypes[index];
+
+            switch [typeParam.t, passedParam] {
+                /**
+                    A monomorph at this point that is null, is useless, especially when
+                    the compiler knows what it might be, but doesnt tell us. See next comment.
+                **/
+                case [TInst(_.get() => cls = {kind:KTypeParameter(c)}, params), TMono(_.get() => t)]:
+                    if (debug) trace( params.map( p -> p.toString() ));
+
+                    /**
+                        Outputs something along the lines of `Unknown<0> : Float`,
+                        BUT! digging into the `type`, the type constraint `Float`, afaik, is
+                        nowhere to be found, thru the public api at least.
+                    **/
+                    if (t == null) {
+                        var stringy = passedParam.toString();
+
+                        if (typeParamEReg.match( stringy )) {
+                            var typeId = typeParamEReg.matched(1);
+
+                            try {
+                                c.push( Context.getType(typeId) );
+
+                            } catch(e) {
+                                if (debug) trace( e );
+
+                            }
+
+                        }
+
+                    }
+
+                    constraints.push( c );
+
+                case [a, b]:
+                    if (debug) trace( a, b );
+                    constraints.push( [b] );
+
+            }
+
+        }
+
+        if (debug) {
+            trace( '<type parameters ...>' );
+            trace( 'typeParameters      :   ' + typeParameters );
+            trace( 'concreteTypes       :   ' + concreteTypes );
+            trace( 'constraints         :   ' + constraints );
+        }
+
+        return { typeParameters:typeParameters, concreteTypes:concreteTypes, constraints:constraints };
+    }
+
     public static function determineTask(expr:Expr, input:Type, output:Type, ?debug:Bool):ResolveTask {
         if (debug == null) debug = Debug && CoerceVerbose;
         var result:ResolveTask = null;
@@ -87,17 +218,34 @@ class Resolver {
         var fieldEReg = ~//i;
         var metaEReg = ~//i;
 
+        var typeInfo = getTypeParameters( output, debug );
+        var reduced = typeInfo.reduce();
+
         // Check if its a redefined type first.
+        // typedef Name = Resolve<T, ~/field/, ~/@:meta/>;
         switch output {
             case TType(_.get() => def, _):
+                if (debug) {
+                    trace( 'was      :   ' + output.toString() );
+
+                }
+
                 output = def.type;
+
+                if (debug) {
+                    trace( 'now      :   ' + output.toString() );
+
+                }
 
             case _:
 
         }
 
-        switch output {
-            case TAbstract(_.get() => {name:'Resolve'}, params): 
+        var sealedType = output.applyTypeParameters( reduced.typeParameters, reduced.concreteTypes);
+
+        switch sealedType {
+            // Remember there are currently two types, both starting with "Resolve"
+            case TAbstract(_.get() => abs = {name:_.startsWith('Resolve') => true}, params): 
                 isResolve = true;
                 // Correct the `rawOutput` type.
                 rawOutput = params[0];
@@ -127,11 +275,12 @@ class Resolver {
         }
         
         if (debug) {
+            trace( '<info ...>' );
             trace( 'expression      :   ' + expr.toString() );
             trace( 'input type      :   ' + input );
-            trace( 'input reduced   :   ' + input.reduce() );
+            trace( '⨽ reduced       :   ' + input.reduce() );
             trace( 'output type     :   ' + output );
-            trace( 'output reduced  :   ' + rawOutput );
+            trace( '⨽ reduced       :   ' + rawOutput );
             trace( 'function?       :   ' + isMethod );
             trace( 'resolve?        :   ' + isResolve );
             trace( 'field ereg      :   ' + fieldEReg );
@@ -193,9 +342,36 @@ class Resolver {
 
             }
 
+        } else if (isResolve && !isMethod) {
+            var _type = input.reduce();
+            var isStatic = false;
+
+            switch _type {
+                case TAnonymous(_.get() => {status:AClassStatics(ref)}):
+                    _type = TInst(ref, []);
+                    isStatic = true;
+
+                case TAnonymous(_.get() => {status:AClassStatics((clsr = _.get() =>  {kind:KAbstractImpl(absr)})) }):
+                    _type = TInst(clsr, []);
+                    isStatic = true;
+
+                case TAbstract(_.get() => abs, params):
+                    if (abs.impl != null) {
+                        _type = TInst(abs.impl, params);
+                        isStatic = true;
+
+                    }
+                
+                case x:
+                    if (debug) trace( x );
+
+            }
+
+            result = SearchProperty(rawOutput, _type, isStatic, expr, fieldEReg, metaEReg);
+
         } else {
             // var _:$output = coerce($expr:$input);
-            result = ConvertValue(input, output, expr);
+            result = ConvertValue(input, rawOutput, expr);
 
         }
 
@@ -209,6 +385,7 @@ class Resolver {
                     trace(result);
 
             }
+
         }
 
         return result;
@@ -237,13 +414,14 @@ class Resolver {
                     trace( 'return type :   ' + ret );
                 }
 
-                var fields:Array<{name:String, type:Type, meta:Metadata}> = switch module {
+                var fields:Array<ClassField> = switch module {
                     // The class which is auto generated for abstracts.
                     case TInst(clsr = _.get() => cls = {kind:KAbstractImpl(absr)}, params):
                         if (debug) {
                             trace( "Instance abstract `new T`" ); 
                         }
-                        var fs = [];
+                        
+                        var fs:Array<ClassField> = [];
                         // Afaik, all abstract methods get converted to statics?
                         var sfields = cls.statics.get();
 
@@ -283,11 +461,9 @@ class Resolver {
                                         **/
                                         if (args.length > 1 && args[0].t.followWithAbstracts().unify(raw)) {
                                             field.meta.add( ResolverBind, [macro $v{args.length-1}], field.pos );
-                                            fs.push( {
-                                                name: field.name,
-                                                type: TFun(args.slice(1), ret),
-                                                meta: field.meta.get(),
-                                            } );
+                                            var _field = Reflect.copy(field);
+                                            _field.type = TFun(args.slice(1), ret);
+                                            fs.push( _field );
 
                                         } else {
                                             if (debug) trace( field.name, x );
@@ -303,8 +479,8 @@ class Resolver {
 
                         } else {
                             // See `@:impl` commment above.
-                            for (field in sfields) /*if (!field.meta.has(Metas.Impl))*/ {
-                                fs.push( {name:field.name, type:field.type, meta:field.meta.get()} );
+                            for (field in sfields) if (field.kind.match( FMethod(_) ))/*if (!field.meta.has(Metas.Impl))*/ {
+                                fs.push( field );
                             }
 
                         }
@@ -313,8 +489,8 @@ class Resolver {
 
                     case TInst(_.get() => cls, params):
                         if (debug) trace( 'Class' );
-                        var fs = statics ? cls.statics.get() : cls.fields.get();
-                        fs.map( f -> {name:f.name, type:f.type, meta:f.meta.get()} );
+                        var fs:Array<ClassField> = statics ? cls.statics.get() : cls.fields.get();
+                        fs.filter( f -> f.kind.match( FMethod(_) ));
 
                     case TAbstract(_.get() => abs, params) if (metaEReg != null):
                         if (debug) {
@@ -322,7 +498,7 @@ class Resolver {
                             trace( 'Check statics:  $statics' );
                         }
 
-                        var fs = [];
+                        var fs:Array<ClassField> = [];
 
                         if (statics) {
                             /**
@@ -331,7 +507,7 @@ class Resolver {
                             **/
                             if (metaEReg.match('@' + Metas.From)) {
                                 for (f in abs.from) if (f.field != null) {
-                                    fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
+                                    fs.push( f.field );
     
                                 }
     
@@ -353,7 +529,7 @@ class Resolver {
 
                                     for (f in abs.binops) if (f.field != null) {
                                         if (debug) trace( 'Adding @:op overload `$b` method ${f.field.name}' );
-                                        fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
+                                        fs.push( f.field );
                                     }
 
                                     // TODO Should we break on the first match...
@@ -365,7 +541,7 @@ class Resolver {
                             var unop = ['++', '--', '!', '-', '~'];
                             for (u in unop) if (metaEReg.match(op + '(${u}A)')) {
                                 for (f in abs.unops) if (f.field != null) {
-                                    fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
+                                    fs.push( f.field );
                                 }
 
                                 // TODO Should we break on the first match...
@@ -375,26 +551,26 @@ class Resolver {
                             // Check postfix.
                             for (u in ['++', '--']) if (metaEReg.match(op + '(A$u)')) {
                                 for (f in abs.unops) if (f.field != null) {
-                                    fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
+                                    fs.push( f.field );
                                 }
                                 break;
                             }
     
                             // Check array access
                             if (metaEReg.match(op + '([])') || metaEReg.match('@' + Metas.ArrayAccess)) for (f in abs.array) {
-                                fs.push( {name:f.name, type:f.type, meta:f.meta.get()} );
+                                fs.push( f );
                             }
 
                             // Check resolve
                             if (metaEReg.match(op + '(a.b)') || metaEReg.match('@' + Metas.Resolve)){
-                                if (abs.resolve != null) fs.push( {name:abs.resolve.name, type:abs.resolve.type, meta:abs.resolve.meta.get()} );
-                                if (abs.resolveWrite != null) fs.push( {name:abs.resolveWrite.name, type:abs.resolveWrite.type, meta:abs.resolveWrite.meta.get()} );
+                                if (abs.resolve != null) fs.push( abs.resolve );
+                                if (abs.resolveWrite != null) fs.push( abs.resolveWrite );
                             }
 
                         } else {
                             // Check @:to implicit casts
                             if (metaEReg.match('@' + Metas.To)) for (f in abs.to) {
-                                fs.push( {name:f.field.name, type:f.field.type, meta:f.field.meta.get()} );
+                                fs.push( f.field );
                             }
 
                         }
@@ -410,85 +586,35 @@ class Resolver {
 
                 }
 
-                fields = fields.filter( f -> f.name != '' );
+                var _pairs:Array<Pair<ClassField, Int>> = [
+                    for (field in fields) {
+                        if (field.name != '') {
+                            var weight = filterFields(field, signature, fieldEReg, metaEReg, debug);
+
+                            if (weight > 0) {
+                                new Pair(field, weight);
+            
+                            }
+            
+                        }
+                    }
+                ];
 
                 if (debug) {
                     trace( 'checking    :   ' + fields.map( f->f.name ) );
                 }
 
-                haxe.ds.ArraySort.sort( fields, (f1, f2) -> {
-                    var fieldMatch = blankField;
-                    var metaMatch = blankMeta;
-                    
-                    var f1total = 0;
-                    var f2total = 0;
-
-                    /**
-                        Check the equality of types signatures, which is preferred over unifying types.
-                        Type to String equality is gonna bite me in the ass.
-                    **/
-                    switch ([signature, f1.type, f2.type]) {
-                        case [TFun(args, ret), TFun(args1, ret1), TFun(args2, ret2)]:
-                            var idents = args.map( a -> a.t.toString() );
-                            var retIdent = ret.toString();
-
-                            if (args.length == args1.length && retIdent == ret1.toString()) {
-                                for (i in 0...args1.length) if (idents[i] == args1[i].t.toString()) {
-                                    f1total++;
-                                }
-
-                            }
-
-                            if (args.length == args2.length && retIdent == ret2.toString()) {
-                                for (i in 0...args2.length) if (idents[i] == args2[i].t.toString()) {
-                                    f2total++;
-                                }
-                                
-                            }
-
-                            if (f1.type.unify(signature)) f1total++;
-                            if (f2.type.unify(signature)) f2total++;
-
-                        case _:
-
-                    }
-
-                    if (!fieldMatch) {
-                        switch [fieldEReg.match(f1.name), fieldEReg.match(f2.name)] {
-                            case [true, false]: f1total++;
-                            case [false, true]: f2total++;
-                            case _:
-                        }
-
-                    }
-
-                    if (!metaMatch) {
-                        for (meta in f1.meta) {
-                            var str = printer.printMetadata(meta);
-                            if (debug) trace(str);
-                            if (metaEReg.match( str )) f1total++;
-                        }
-
-                        for (meta in f2.meta) {
-                            var str = printer.printMetadata(meta);
-                            if (debug) trace(str);
-                            if (metaEReg.match( str )) f2total++;
-                        }
-
-                    }
-
-                    if (debug) {
-                        trace( f1.name, f2.name, f1total, f2total, f1total - f2total );
-                    }
-
-                    return f1total - f2total;
+                haxe.ds.ArraySort.sort( _pairs, function(a, b) {
+                    var wA = a.b;
+                    var wB = b.b;
+                    return wA - wB;
                 } );
 
                 if (debug) {
-                    trace( 'sorted      :   ' + fields.map( f->f.name ) );
+                    trace( 'sorted      :   ' + _pairs.map( p -> p.a.name ) );
                 }
 
-                results = fields;
+                results = _pairs.map( p -> { name:p.a.name, type:p.a.type, meta:p.a.meta.get() } );
 
             case x:
                 return Failure(new Error( NotFound, NotFunction + ' Not ${x.getID()}', pos ));
@@ -498,6 +624,147 @@ class Resolver {
         return Success(results);
     }
 
+    public static function findProperty(signature:Type, module:Type, statics:Bool, pos:Position, ?fieldEReg:EReg, ?metaEReg:EReg, ?debug:Bool):Outcome<Array<{name:String, type:Type, meta:Metadata}>, Error> {
+        if (debug == null) debug = Debug && CoerceVerbose;
+        var blankField = fieldEReg == null || '$fieldEReg'.startsWith('~//');
+        var blankMeta = metaEReg == null || '$metaEReg'.startsWith('~//');
+        
+        if (debug) {
+            trace( 'module  :   ' + module.getID() );
+        }
+
+        var fields = switch module {
+            case TInst(_.get() => cls, _):
+                if (statics) {
+                    cls.statics.get();
+
+                } else {
+                    cls.fields.get();
+
+                }
+
+            case x:
+                if (debug) trace( x );
+                [];
+
+        }
+
+        var _pairs:Array<Pair<ClassField, Int>> = [
+            for (field in fields) {
+                if (!field.kind.match( FMethod(_) )) {
+                    var weight = filterFields(field, signature, fieldEReg, metaEReg, debug);
+                    if (weight > 0) {
+                        new Pair(field, weight);
+    
+                    }
+    
+                }
+            }
+        ];
+
+        haxe.ds.ArraySort.sort( _pairs, function(a, b) {
+            var wA = a.b;
+            var wB = b.b;
+            return wA - wB;
+        } );
+
+        if (debug) {
+            trace( '<property weights ...>' );
+            for (pair in _pairs) trace( pair.a.name, pair.b );
+        }
+
+        return Success(_pairs.map( p -> { name:p.a.name, meta:p.a.meta.get(), type:p.a.type }));
+    }
+
+    /**
+        The returned value is the weight, based on the factors that the field matched against. Higher equals more specific.
+    **/
+    private static function filterFields(field:ClassField, signature:Type, ?fieldEReg:EReg, ?metaEReg:EReg, debug:Bool = false):Int {
+        var weight = 0;
+        var ftype = field.type.followWithAbstracts();
+        var blankField = fieldEReg == null || '$fieldEReg'.startsWith('~//');
+        var blankMeta = metaEReg == null || '$metaEReg'.startsWith('~//');
+
+        if (debug) {
+            trace( '<filtering properties>' );
+            trace( 'field name      :   ' + field.name );
+            trace( '⨽ type          :   ' + ftype.toString() );
+            trace( '<matching against ...>' );
+            trace( 'signature       :   ' + signature.toString() );
+            trace( '<comparison ...>' );
+            trace( 'equality        :   ' + ftype.compare( signature ) );
+            trace( '<checks ...>' );
+            trace( 'empty field ereg:   ' + blankField );
+            trace( 'empty meta ereg :   ' + blankMeta );
+        }
+
+        // `compare` is from tink_macro `Types.hx`
+        if (ftype.compare( signature ) == 0) {
+            if (debug) trace( 'type equality    :   true' );
+            weight++;
+        }
+        
+        /**
+            `type1.unify(type2)` which calls an internal compiler function,
+            seems to trigger some state, via tmono's? 🤷‍♀️
+            This can cause abstract types with macro methods, with define guarded fields,
+            to resolve types incorrectly and throw a compiler error.
+        **/
+        /*if (ftype.unify(signature)) {
+            if (debug) trace( 'type unity      :   true' );
+            weight++;
+        }*/
+        /**
+            Comparing the `field.type` against the `signature` manaually, assuming dynamic
+            and monomorph types equate with any other type, use `tink_macro`'s compare which
+            recurses Types enum, using indexes and string comparions for equality.
+        **/
+        function compare(a:Type, b:Type):Int {
+            return switch [a, b] {
+                case [TDynamic(t) | TMono(_.get() => t), _ ] | [_, TDynamic(t) | TMono(_.get() => t)] if (t == null):
+                    0;
+
+                case [a, b]: a.compare(b);
+            }
+        }
+        switch [signature, ftype] {
+            case [TFun(args1, ret1), TFun(args2, ret2)]:
+                var retDistance = compare( ret1, ret2 );
+                var fargs1 = args1.filter( a -> !a.opt );
+                var fargs2 = args2.filter( a -> !a.opt );
+
+                if (retDistance == 0 && fargs1.length > 0 && fargs1.length == fargs2.length) {
+                    var argDistance = 0;
+                    for (index in 0...fargs1.length) {
+                        var a = fargs1[index];
+                        var b = fargs2[index];
+                        if (a == null || b == null) break;
+                        var distance = compare( a.t, b.t);
+                        argDistance += distance;
+                    }
+
+                    if (argDistance == 0) weight++;
+
+                }
+
+            case [a, b]:
+                if (debug) trace( field.name, a , b );
+
+        }
+        
+        if (!blankField && fieldEReg.match( field.name )) {
+            if (debug) trace( 'field match     :   true' );
+            weight++;
+        }
+
+        if (!blankMeta && field.meta.get().filter( m -> metaEReg.match( printer.printMetadata(m) )).length > 0) {
+            if (debug) trace( 'meta match      :   true' );
+            weight++;
+        }
+
+        return weight;
+    }
+
     public static function convertValue(input:Type, output:Type, value:Expr, ?debug:Bool):Outcome<Expr, Error> {
         if (debug == null) debug = Debug && CoerceVerbose;
         var inputID = input.getID();
@@ -505,6 +772,7 @@ class Resolver {
         var pos = value.pos;
 
         if (debug) {
+            trace( '<convert value ...>' );
             trace( 'input       :   ' + input );
             trace( 'output      :   ' + output );
             trace( 'value       :   ' + value.toString() );
@@ -655,6 +923,9 @@ class Resolver {
                     case Multiple(tasks):
                         Context.fatalError( NoNesting, pos );
 
+                    case SearchProperty(signture, module, statics, expr, ereg, meta):
+                        Context.fatalError( 'Searching multiple properties is not supported yet.', pos );
+
                     case SearchMethod(signature, module, statics, e, fieldEReg, metaEReg):
                         if (debug) trace( 'multi task  :   search methods' );
                         switch Resolver.findMethod(signature, module, statics, e.pos, fieldEReg, metaEReg) {
@@ -767,7 +1038,49 @@ class Resolver {
                         
                 };
 
-            case SearchMethod(signature, module, statics, e, fieldEReg, metaEReg): 
+            case SearchProperty(signature, module, statics, e, fieldEReg, metaEReg):
+                switch Resolver.findProperty(signature, module, statics, e.pos, fieldEReg, metaEReg) {
+                    case Success(matches):
+                        if (matches.length == 1) {
+                            result = e.field( matches[0].name );
+
+                        } else if (matches.length > 1) {
+                            while (matches.length > 0) {
+                                var field = matches.pop();
+
+                                if (debug) {
+                                    trace( '<checking ...>' );
+                                    trace( 'field name      :   ' + field.name );
+                                    trace( 'normal type     :   ' + field.type );
+                                    trace( 'reduced type    :   ' + field.type.follow() );
+                                    trace( 'signature       :   ' + signature );
+                                }
+
+                                if (field.type.follow().unify(signature)) {
+                                    result = e.field( field.name );
+                                    break;
+
+                                } else {
+                                    if (debug) {
+                                        trace( 'Field `' + field.name + '` type ' + field.type + ' failed to match against ' + signature );
+                                    }
+                                    result = e.field( field.name );
+
+                                }
+
+                            }
+
+                        } else {
+                            Context.fatalError( NoMatches, e.pos );
+
+                        }
+
+                    case Failure(error):
+                        Context.fatalError( error.message, error.pos );
+
+                }
+
+            case SearchMethod(signature, module, statics, e, fieldEReg, metaEReg):
                 switch Resolver.findMethod(signature, module, statics, e.pos, fieldEReg, metaEReg) {
                     case Success(matches):
                         if (matches.length == 1) {
