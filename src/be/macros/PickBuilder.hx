@@ -8,12 +8,14 @@ import haxe.macro.Expr.ComplexType;
 import haxe.macro.*;
 
 using tink.MacroApi;
+using haxe.macro.TypeTools;
 
 class PickBuilder {
 
     public static function search() {
         var type = Context.getLocalType();
         var pos = Context.currentPos();
+        var debug = true;//Defines.Debug && CoerceVerbose;
 
         var signature = null;
         var signatureType = null;
@@ -43,7 +45,7 @@ class PickBuilder {
                             key += r + opt;
 
                         case x:
-                            if (Defines.Debug && CoerceVerbose) {
+                            if (debug) {
                                 trace( x );
                             }
 
@@ -51,28 +53,37 @@ class PickBuilder {
 
             }
 
-            case _:
-                Context.fatalError('Not enough type parameter\'s for ${type}', pos);
+            case x:
+                if (debug) trace( x );
+                /**
+                    If no parameters are found, its likely an import, or fully qualified usage.
+                **/
+                return macro:be.types.ResolveFunctions;
+        }
+
+        if (debug) {
+            trace( 'signature       :   ' + signatureType == null ? null : signatureType.toString() );
 
         }
 
         if (fieldEReg == null) fieldEReg = macro ~//i;
         if (metaEReg == null) metaEReg = macro ~//i;
 
-        var ctype = macro:be.types.Resolve<$signatureComplex>;
+        var ctype = macro:be.types.ResolveMethod;//<$signatureComplex>;
         switch ctype {
             case TPath({params:params}):
+                params.push( TPType(signatureComplex) );
                 // Manually insert TPExpr, as `macro:be.types.Resolve<$signatureComplex, $fieldEReg, $metaEReg>` fails.
                 params.push( TPExpr(fieldEReg) );   // field name regular expression.
                 params.push( TPExpr(metaEReg) );    // field metadata regular expression.
 
             case x:
-                trace(x);
+                if (debug) trace(x);
 
         }
 
-        if (Defines.Debug && CoerceVerbose) {
-            trace( ctype.toString() );
+        if (debug) {
+            trace( ctype/*.toString()*/ );
         }
 
         return ctype;

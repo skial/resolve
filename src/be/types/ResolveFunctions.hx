@@ -10,10 +10,7 @@ using haxe.macro.Context;
 using tink.MacroApi;
 #end
 
-#if !(eval || macro)
-@:genericBuild( be.macros.PickBuilder.search() )
-#end
-class Resolve<Rest> {
+class ResolveFunctions {
 
     public static macro function coerce<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
         var debug = Debug && CoerceVerbose;
@@ -46,10 +43,10 @@ class Resolve<Rest> {
         }
 
         switch type {
-            case TType(_.get() => {name:"ResolvedMethod"}, _):
+            case TType(_.get() => {name:"FoundMethod"}, _):
                 if (debug) trace('<already resolved ...>');
                 return expr;
-            case TAbstract(_.get() => { name:"Resolve"}, _):
+            case TAbstract(_.get() => { name:"ResolveMethod"}, _):
                 if (debug) trace('<already a resolve ...>');
                 return expr;
 
@@ -60,7 +57,7 @@ class Resolve<Rest> {
         var wrap:Bool = false;
         var expectedType = Context.getExpectedType();
         var outputType = switch expectedType {
-            case TType(_.get() => { type: TAbstract(_.get() => {name:"Resolve"}, params)}, _) | TAbstract(_.get() => { name:"Resolve"}, params):
+            case TType(_.get() => { type: TAbstract(_.get() => {name:"ResolveMethod"}, params)}, _) | TAbstract(_.get() => { name:"ResolveMethod"}, params):
                 wrap = true;
                 params[0];
 
@@ -77,7 +74,7 @@ class Resolve<Rest> {
         var result:Expr = Resolver.handleTask(task);
 
         if (wrap && outputComplex != null) result = macro ($e{result}:$outputComplex);
-        result = macro @:pos(expr.pos) be.types.Resolve.seal( $result );
+        result = macro @:pos(expr.pos) be.types.ResolveMethod.seal( $result );
 
         if (debug) {
             trace(result.toString());

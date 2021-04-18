@@ -1,6 +1,6 @@
 package ;
 
-import be.types.Pick;
+import be.types.Resolve;
 import be.types.Resolve.resolve;
 
 @:asserts
@@ -9,7 +9,7 @@ class PickSpec {
     public function new() {}
 
     public function testPick_functionType() {
-        var p:Pick<String->String> = Foo;
+        var p:Resolve<String->String> = Foo;
 
         asserts.assert( p('foooooo') == 'str: foooooo' );
 
@@ -21,7 +21,7 @@ class PickSpec {
     }
 
     public function testPick_functionEreg() {
-        var p:Pick<String->String, ~/echoStr(ing)?/i> = Bar;
+        var p:Resolve<String->String, ~/echoStr(ing)?/i> = Bar;
 
         asserts.assert( p('bar') == 'ECHO: bar' );
 
@@ -29,7 +29,7 @@ class PickSpec {
     }
 
     public function testPick_metadataEreg() {
-        var p:Pick<Int->Int->Int, ~/@:op\([a-z ]+\+[a-z ]+\)/i> = Baz;
+        var p:Resolve<Int->Int->Int, ~/@:op\([a-z ]+\+[a-z ]+\)/i> = Baz;
 
         asserts.assert( p(4, 4) == 8 );
 
@@ -50,7 +50,7 @@ class PickSpec {
 
     public function testPick_abstract() {
         var a:Qux = 10;
-        var p:Pick<Int->Int->Int, ~/@:op\([a-z ]+\+[a-z ]+\)/i> = Qux;
+        var p:Resolve<Int->Int->Int, ~/@:op\([a-z ]+\+[a-z ]+\)/i> = Qux;
 
         asserts.assert( p(a, 10) == 20 );
 
@@ -68,7 +68,7 @@ class PickSpec {
 
     public function testPick_abstractInstance() {
         var a:Qux = 10;
-        var p:Pick<Int->Int, ~/@:op\([a-z ]+\+[a-z ]+\)/i> = a;
+        var p:Resolve<Int->Int, ~/@:op\([a-z ]+\+[a-z ]+\)/i> = a;
 
         asserts.assert( p(10) == 20 );
 
@@ -77,8 +77,8 @@ class PickSpec {
 
 }
 
-typedef StringParser = Pick<String->Int, ~/(parse|mk)Int/>;
-typedef AbstractAdder = Pick<Int->Int->Int, ~/@:op\([a-z ]+\+[a-z ]+\)/i>;
+typedef StringParser = Resolve<String->Int, ~/(parse|mk)Int/>;
+typedef AbstractAdder = Resolve<Int->Int->Int, ~/@:op\([a-z ]+\+[a-z ]+\)/i>;
 
 class Foo {
 
