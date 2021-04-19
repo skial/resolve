@@ -4,6 +4,7 @@ import be.types.Resolve;
 import be.types.Resolve.resolve;
 
 @:asserts
+// The macro type `Resolve` used to be `Pick<T>`, while `Resolve` was an abstract.
 class PickSpec {
 
     public function new() {}

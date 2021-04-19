@@ -1,4 +1,4 @@
-# rresolve
+# resolve
 
 An `abstract` type to help filter and select functions based on method signatures and naming schemes and metadata usage using regular expressions.
 
