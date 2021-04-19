@@ -1,6 +1,5 @@
 package coerce;
 
-import be.types.Resolve;
 import be.types.Resolve.coerce;
 
 @:asserts
