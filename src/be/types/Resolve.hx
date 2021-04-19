@@ -11,7 +11,7 @@ using tink.MacroApi;
 #end
 
 #if !(eval || macro)
-@:genericBuild( be.macros.PickBuilder.search() )
+@:genericBuild( be.macros.ResolveBuilder.search() )
 #end
 class Resolve<Rest> {
 
