@@ -1,10 +1,10 @@
-# coerce
+# rresolve
 
-An `abstract` type to help filter and select functions based on method signatures and regular expressions for naming schemes and metadata usage.
+An `abstract` type to help filter and select functions based on method signatures and naming schemes and metadata usage using regular expressions.
 
 ### Why tho?
 
-Coerce is more useful for when dealing with user provided types during macro generation. _If using coerce in other macros, it is recommended to use the `be.macros.Resolver` methods directly._
+Resolve is more useful for when dealing with user provided types during macro generation. _If using resolve in other macros, it is recommended to use the `be.macros.Resolver` methods directly._
 
 ### Type Support
 
@@ -13,27 +13,41 @@ Classes and Abstracts are supported, currently. There are two ways of searching,
 ##### Searching Statics
 
 -   ```haxe
-    var r:Resolve<Int->Int, ~//, ~//> = SomeClass;
+    var r:Resolve<Int->Int> = SomeClass;
     ```
 
 ##### Searching Instances
 
 -   ```haxe
     var i:SomeClass = new SomeClass();
-    var r:Resolve<Int->Int, ~//, ~//> = i;
+    var r:Resolve<Int->Int> = i;
     ```
 
 ##### Filtering against names
 
 - ```haxe
-  var r:Resolve<Int->Int, ~/add(ition|able)?/, ~//> = /*Search against instance or static expression*/.
+  var r:Resolve<Int->Int, ~/add(ition|able)?/> = /*Search against instance or static expression*/.
   ```
 
 ##### Filtering against metadata
 
 > Notice the open and close brackets `()` are escaped.
 - ```haxe
-  var r:Resolve<Int->Int, ~//, ~/@:op\([\w\d\s]+\+[\w\d\s]+\)/> = /*Search against instance or static expression*/.
+  var r:Resolve<Int->Int, ~/@:op\([\w\d\s]+\+[\w\d\s]+\)/> = /*Search against instance or static expression*/.
+  ```
+
+##### Filtering against names & metadata
+
+- `Resolve<$type, $name, $meta>`
+    + `$type` is always position `0`.
+    + If both `EReg`'s are used:
+      - Searching names is always position `1`.
+      - Searching metas is always position `2`.
+    + If either `EReg` is omitted, `Resolve` will:
+      - Check for `@` character, if it exists, it assumes its a meta regular expression.
+      - Otherwise it defaults to a name regular expression.
+- ```haxe
+  var r:Resolve<Int->Int, ~/add(ition|able)?/, ~/@:op\([\w\d\s]+\+[\w\d\s]+\)/> = /*Search against instance or static expression*/.
   ```
 
 ##### Abstract Support
@@ -115,15 +129,15 @@ public class Fake {
 }
 ```
 
-#### `Pick`
+#### `Resolve`
 
-`Pick` is a `@:genericBuild` macro which creates a `Resolve` type, making it a more friendly type to work with. 
-- `Pick` only requires the type signature.
-- How does `Pick` decide if a regular expression passed in is a metadata filter or not?
+`Resolve` is a `@:genericBuild` macro which redirects to a `ResolveMethod` or `ResolveProperty` or `ResolveFunctions` type.
+- `Resolve` only requires the type signature.
+- How does `Resolve` decide if a regular expression passed in is a metadata filter or not?
     + It checks for the existence of the `@` character, which isn't a valid ident character in Haxelang.
 
 ```haxe
-import be.types.Pick;
+import be.types.Resolve;
 import be.types.Resolve.resolve;
 
 class Main {
@@ -135,8 +149,8 @@ class Main {
         trace( asInt(_ -> 1, '125') );  // trace(1);
     }
 
-    // `Pick<String-Int>` returns the `Resolve<String->Int, ~//, ~//>` type.
-    static function asInt(r:Pick<String->Int>, v:String):Int return r(v);
+    // `Resolve<String-Int>` returns the `ResolveMethod<String->Int, ~//, ~//>` type.
+    static function asInt(r:Resolve<String->Int>, v:String):Int return r(v);
 }
 
 public class Fake {
@@ -147,7 +161,7 @@ public class Fake {
 
 ### ⚠ `be.macros.Resolver`
 
-Take a look at the source for `be.coerce.Resolve` for getting started.
+> Take a look at the source for `be.types.ResolveFunctions` for getting started.
 
 ```haxe
 class Resolver {
