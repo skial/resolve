@@ -203,12 +203,6 @@ class Resolver {
         if (debug == null) debug = Debug && ResolveVerbose;
         var result:ResolveTask = null;
 
-        // Yes this is a lazy hack but its for future me.
-        if ('$output'.indexOf('TAbstract(be.types.Pick') > -1) {
-            var c = output.toComplex();
-            output = Context.typeof(macro (null:$c).asResolve());
-        }
-
         //var rawInput = input.followWithAbstracts();
         //  Assume its in a raw form, i.e not an abstract or typedef redeclaration.
         var rawOutput = output;
