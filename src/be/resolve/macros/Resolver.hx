@@ -1,4 +1,4 @@
-package be.macros;
+package be.resolve.macros;
 
 import haxe.macro.Type;
 import haxe.macro.Expr;
@@ -48,7 +48,7 @@ class TypeParamSet {
 }
 
 @:structInit
-@:using(be.macros.Resolver.TypeParamInfoUsings)
+@:using(be.resolve.macros.Resolver.TypeParamInfoUsings)
 class TypeParamInfo extends TypeParamSet {
     public var constraints:Array<Array<Type>>;
 

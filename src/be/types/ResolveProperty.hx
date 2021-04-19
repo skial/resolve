@@ -3,7 +3,7 @@ package be.types;
 #if (eval || macro)
 import haxe.macro.Expr;
 import haxe.macro.Defines;
-import be.macros.Resolver;
+import be.resolve.macros.Resolver;
 
 using haxe.macro.Context;
 using tink.MacroApi;

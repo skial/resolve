@@ -1,8 +1,8 @@
-package be.macros;
+package be.resolve.macros;
 
 import haxe.macro.Type;
 import haxe.macro.Defines;
-import be.macros.Resolver.LocalDefines;
+import be.resolve.macros.Resolver.LocalDefines;
 import haxe.macro.Expr.TypePath;
 import haxe.macro.Expr.ComplexType;
 import haxe.macro.*;

@@ -1,10 +1,10 @@
 # resolve
 
-An `abstract` type to help filter and select functions based on method signatures and naming schemes and metadata usage using regular expressions.
+An `abstract` type to help filter and select fields based on type signatures, naming schemes and metadata usage using regular expressions.
 
 ### Why tho?
 
-Resolve is more useful for when dealing with user provided types during macro generation. _If using resolve in other macros, it is recommended to use the `be.macros.Resolver` methods directly._
+Resolve is more useful for when dealing with user provided types during macro generation. _If using resolve in other macros, it is recommended to use the `be.resolve.macros.Resolver` methods directly._
 
 ### Type Support
 
@@ -40,9 +40,9 @@ Classes and Abstracts are supported, currently. There are two ways of searching,
 
 - `Resolve<$type, $name, $meta>`
     + `$type` is always position `0`.
-    + If both `EReg`'s are used:
-      - Searching names is always position `1`.
-      - Searching metas is always position `2`.
+    + If both `EReg`'s are supplied:
+      - Names is always position `1`.
+      - Metas is always position `2`.
     + If either `EReg` is omitted, `Resolve` will:
       - Check for `@` character, if it exists, it assumes its a meta regular expression.
       - Otherwise it defaults to a name regular expression.
@@ -108,7 +108,7 @@ import be.types.Resolve.resolve;
 class Main {
     public static function main() {
         var input = '999';
-        var r:Resolve<String->Int, ~/int/i, ~//i> = resolve(Std);
+        var r:Resolve<String->Int, ~/int/i> = resolve(Std);
         // `r` is already resolved, so gets passed as `Std.parseInt`.
         trace( asInt(r, input) );       // trace(999);
         // Resolves to `Std.parseInt`.
@@ -131,7 +131,7 @@ public class Fake {
 
 #### `Resolve`
 
-`Resolve` is a `@:genericBuild` macro which redirects to a `ResolveMethod` or `ResolveProperty` or `ResolveFunctions` type.
+`Resolve` is a `@:genericBuild` macro which redirects to either a `ResolveMethod` or `ResolveProperty` or `ResolveFunctions` type.
 - `Resolve` only requires the type signature.
 - How does `Resolve` decide if a regular expression passed in is a metadata filter or not?
     + It checks for the existence of the `@` character, which isn't a valid ident character in Haxelang.
@@ -159,9 +159,9 @@ public class Fake {
 }
 ```
 
-### ⚠ `be.macros.Resolver`
+### ⚠ `be.resolve.macros.Resolver`
 
-> Take a look at the source for `be.types.ResolveFunctions` for getting started.
+> Take a look at the source of `be.types.ResolveFunctions` for getting started.
 
 ```haxe
 class Resolver {
