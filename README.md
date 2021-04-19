@@ -174,4 +174,4 @@ class Resolver {
 
 ### Defines
 
-- `-D coerce-verbose` - Paired with `-debug` will have the build macros print **a lot** of trace statements.
+- `-D resolve-verbose` - Paired with `-debug` will have the build macros print **a lot** of trace statements.

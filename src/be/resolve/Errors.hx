@@ -1,4 +1,4 @@
-package be.coerce;
+package be.resolve;
 
 @:notNull @:forward @:forwardStatics enum abstract Errors(String) from String to String {
     public var NoMatches = 'No vailid matches have been found.';

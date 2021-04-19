@@ -6,7 +6,7 @@ import haxe.Constraints.Function;
 import haxe.macro.Expr;
 import haxe.macro.Defines;
 import be.macros.Resolver;
-import be.coerce.ResolveTask;
+import be.resolve.ResolveTask;
 
 using haxe.macro.Context;
 using tink.MacroApi;
@@ -22,7 +22,7 @@ typedef FoundMethod<T:Function> = ResolveMethod<T, ~//, ~//>;
     @:noCompletion public static inline function seal<T:Function>(v:T):FoundMethod<T> return (cast v:FoundMethod<T>);
 
     public static macro function coerce<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
-        var debug = Debug && CoerceVerbose;
+        var debug = Debug && ResolveVerbose;
         if (debug) {
             trace( 'start: coerce' );
             trace( expr.toString(), expr.pos );
@@ -39,7 +39,7 @@ typedef FoundMethod<T:Function> = ResolveMethod<T, ~//, ~//>;
     }
 
     @:from public static macro function resolve<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
-        var debug = Debug && CoerceVerbose;
+        var debug = Debug && ResolveVerbose;
         if (debug) {
             trace( 'start: resolve' );
             trace( expr.toString(), expr.pos );

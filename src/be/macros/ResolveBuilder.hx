@@ -16,7 +16,7 @@ class ResolveBuilder {
     public static function search() {
         var type = Context.getLocalType();
         var pos = Context.currentPos();
-        var debug = Defines.Debug && CoerceVerbose;
+        var debug = Defines.Debug && ResolveVerbose;
 
         var signatureType:Null<Type> = null;
         var signatureComplex:Null<ComplexType> = null;

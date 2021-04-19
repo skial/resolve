@@ -4,7 +4,7 @@ package be.types;
 import haxe.macro.Expr;
 import haxe.macro.Defines;
 import be.macros.Resolver;
-import be.coerce.ResolveTask;
+import be.resolve.ResolveTask;
 
 using haxe.macro.Context;
 using tink.MacroApi;
@@ -16,7 +16,7 @@ using tink.MacroApi;
 class Resolve<Rest> {
 
     public static macro function coerce<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
-        var debug = Debug && CoerceVerbose;
+        var debug = Debug && ResolveVerbose;
         if (debug) {
             trace( 'start: coerce' );
             trace( expr.toString(), expr.pos );
@@ -33,7 +33,7 @@ class Resolve<Rest> {
     }
 
     public static macro function resolve<In, Out>(expr:ExprOf<In>):ExprOf<Out> {
-        var debug = Debug && CoerceVerbose;
+        var debug = Debug && ResolveVerbose;
         if (debug) {
             trace( 'start: resolve' );
             trace( expr.toString(), expr.pos );
