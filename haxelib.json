@@ -1,14 +1,14 @@
 {
-    "name": "coerce",
-    "url": "https://github.com/skial/coerce",
+    "name": "resolve",
+    "url": "https://github.com/skial/resolve",
     "license": "MIT",
     "classPath": "src",
-    "description": "An `abstract` type to help filter and select functions based on method signatures and regular expressions for naming schemes and metadata.",
+    "description": "An abstract type to help filter and select fields based on type signatures, naming schemes and metadata usage using regular expressions.",
     "version": "0.0.1",
     "releasenote": "Improved code and testing",
     "contributors": ["skial"],
     "dependencies": {
-        "tink_macro":"git:https://github.com/haxetink/tink_macro#4fd03ed6673d32011eb9423461a63f0e504ab170",
+        "tink_macro":"git:https://github.com/haxetink/tink_macro#7e2dfad607abcd77b26830a3552c026e9facf26c",
         "tink_unittest":"git:https//github.com/haxetink/tink_unittest#673190d3cfbbc2defc7c57e4bb62ead1f29c86d0",
         "haxe.macro.Metas":"git:https://github.com/skial/haxe.macro.Metas#78f17585218cdec22797e061225c970f28782a51",
         "haxe.macro.Defines":"git:https://github.com/skial/haxe.macro.Defines#14933a2b77504bd800bdcd90a610a17c15252af8"
