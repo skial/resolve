@@ -1,11 +1,11 @@
-package be.macros;
+package be.resolve.macros;
 
 import haxe.macro.Type;
 import haxe.macro.Expr;
 import haxe.macro.Metas;
 import haxe.macro.Defines;
-import be.coerce.Errors;
-import be.coerce.ResolveTask;
+import be.resolve.Errors;
+import be.resolve.ResolveTask;
 
 using StringTools;
 using haxe.macro.Context;
@@ -16,7 +16,7 @@ using haxe.macro.TypeTools;
 @:forward
 @:forwardStatics
 enum abstract LocalDefines(Defines) {
-    public var CoerceVerbose = 'coerce_verbose';
+    public var ResolveVerbose = 'resolve_verbose';
     
     @:to public inline function asBool():Bool {
 		return haxe.macro.Context.defined(this);
@@ -48,7 +48,7 @@ class TypeParamSet {
 }
 
 @:structInit
-@:using(be.macros.Resolver.TypeParamInfoUsings)
+@:using(be.resolve.macros.Resolver.TypeParamInfoUsings)
 class TypeParamInfo extends TypeParamSet {
     public var constraints:Array<Array<Type>>;
 
@@ -200,7 +200,7 @@ class Resolver {
     }
 
     public static function determineTask(expr:Expr, input:Type, output:Type, ?debug:Bool):ResolveTask {
-        if (debug == null) debug = Debug && CoerceVerbose;
+        if (debug == null) debug = Debug && ResolveVerbose;
         var result:ResolveTask = null;
 
         // Yes this is a lazy hack but its for future me.
@@ -392,7 +392,7 @@ class Resolver {
     }
 
     public static function findMethod(signature:Type, module:Type, statics:Bool, pos:Position, ?fieldEReg:EReg, ?metaEReg:EReg, ?debug:Bool):Outcome<Array<{name:String, type:Type, meta:Metadata}>, Error> {
-        if (debug == null) debug = Debug && CoerceVerbose;
+        if (debug == null) debug = Debug && ResolveVerbose;
         var results = [];
         var blankField = fieldEReg == null || '$fieldEReg'.startsWith('~//');
         var blankMeta = metaEReg == null || '$metaEReg'.startsWith('~//');
@@ -625,7 +625,7 @@ class Resolver {
     }
 
     public static function findProperty(signature:Type, module:Type, statics:Bool, pos:Position, ?fieldEReg:EReg, ?metaEReg:EReg, ?debug:Bool):Outcome<Array<{name:String, type:Type, meta:Metadata}>, Error> {
-        if (debug == null) debug = Debug && CoerceVerbose;
+        if (debug == null) debug = Debug && ResolveVerbose;
         var blankField = fieldEReg == null || '$fieldEReg'.startsWith('~//');
         var blankMeta = metaEReg == null || '$metaEReg'.startsWith('~//');
         
@@ -766,7 +766,7 @@ class Resolver {
     }
 
     public static function convertValue(input:Type, output:Type, value:Expr, ?debug:Bool):Outcome<Expr, Error> {
-        if (debug == null) debug = Debug && CoerceVerbose;
+        if (debug == null) debug = Debug && ResolveVerbose;
         var inputID = input.getID();
         var outputID = output.getID();
         var pos = value.pos;
@@ -909,7 +909,7 @@ class Resolver {
     }
 
     public static function handleTask(task:ResolveTask, ?debug:Bool):Expr {
-        if (debug == null) debug = Debug && CoerceVerbose;
+        if (debug == null) debug = Debug && ResolveVerbose;
         var result:Expr = null;
         var pos = Context.currentPos();
 

@@ -1,4 +1,4 @@
-package be.coerce;
+package be.resolve;
 
 import haxe.macro.Expr;
 import haxe.macro.Type;
