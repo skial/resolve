@@ -161,7 +161,7 @@ public class Fake {
 
 ### ⚠ `be.resolve.macros.Resolver`
 
-> Take a look at the source of `be.types.ResolveFunctions` for getting started.
+> Take a look at the source of `be.types.ResolveFunctions` on how to get started.
 
 ```haxe
 class Resolver {
