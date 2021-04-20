@@ -1064,6 +1064,10 @@ class Resolver {
 
                             }
 
+                        } else if (signature.unify(module)) {
+                            // Compatible types should just pass thru.
+                            result = e;
+
                         } else {
                             Context.fatalError( NoMatches, e.pos );
 

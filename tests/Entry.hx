@@ -36,6 +36,7 @@ class Entry {
             new resolver.AbsInstancePropertySpec(),
             new resolver.AbsStaticPropertySpec(),
             new resolver.GenericPropertySpec(),
+            new PassThrough(),
         ])).handle( Runner.exit );
     }
 
