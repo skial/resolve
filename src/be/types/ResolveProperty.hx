@@ -25,14 +25,18 @@ using StringTools;
 
         switch type {
             case TAbstract(_.get() => {name:"ResolveProperty" }, _): 
-                return expr;
+                if (debug) {
+                    trace('already resolved');
+                }
+                return macro $e{expr}.get();
 
             case x:
                 if (debug) trace( x );
         }
 
         var task = Resolver.determineTask( expr, type, Context.getExpectedType() );
-        var result:Expr = macro @:pos(expr.pos) be.types.ResolveProperty.seal($e{Resolver.handleTask(task)});
+        var e = Resolver.handleTask(task);
+        var result:Expr = macro @:pos(expr.pos) be.types.ResolveProperty.seal($e);
 
         if (debug) {
             trace( result.toString() );

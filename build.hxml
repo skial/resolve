@@ -9,8 +9,10 @@
 #-debug
 
 -D eval-stack
+-D eval-pretty-print
 -D analyzer-optimize
 -D resolve-verbose
+-D messages-log-format=pretty
 
 -main Entry
 
